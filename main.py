@@ -13,6 +13,7 @@ import os
 import platform
 import time
 from pathlib import Path
+from queue import Queue
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtQml import QQmlApplicationEngine
@@ -119,10 +120,27 @@ class HardwareBridge(QObject):
             return False
 
     def _init_ir(self):
-        """Initialize IR receiver (evdev or lircd). Emit signals directly - Qt marshals to main thread."""
+        """Initialize IR receiver (evdev or lircd). Queue events, process on main thread via QTimer."""
         if platform.system() != "Linux":
             return
+        self._ir_queue = Queue()
         def _on_ir(action, payload):
+            self._ir_queue.put((action, payload))
+        self._ir_receiver = IRReceiver(_on_ir)
+        if self._ir_receiver.start():
+            self._ir_timer = QTimer(self)
+            self._ir_timer.timeout.connect(self._process_ir_queue)
+            self._ir_timer.start(50)  # Poll every 50ms
+            if os.environ.get("BJJ_DEBUG"):
+                print(f"[BJJ Timer] IR receiver started ({self._ir_receiver._source})", file=sys.stderr)
+
+    def _process_ir_queue(self):
+        """Process IR events from queue (runs on main thread)."""
+        while not self._ir_queue.empty():
+            try:
+                action, payload = self._ir_queue.get_nowait()
+            except Exception:
+                break
             if action == IR_DIGIT:
                 self.irDigit.emit(payload)
             elif action == IR_SELECT:
@@ -133,10 +151,6 @@ class HardwareBridge(QObject):
                 self.irEncoderDelta.emit(1)
             elif action == IR_DOWN:
                 self.irEncoderDelta.emit(-1)
-        self._ir_receiver = IRReceiver(_on_ir)
-        if self._ir_receiver.start():
-            if os.environ.get("BJJ_DEBUG"):
-                print(f"[BJJ Timer] IR receiver started ({self._ir_receiver._source})", file=sys.stderr)
 
     @Slot(int)
     def _emit_ir_digit(self, digit: int):
@@ -313,6 +327,9 @@ class HardwareBridge(QObject):
         if self._ir_receiver is not None:
             self._ir_receiver.stop()
             self._ir_receiver = None
+        if hasattr(self, "_ir_timer") and self._ir_timer is not None:
+            self._ir_timer.stop()
+            self._ir_timer = None
         if self._buzzer_stop_timer is not None:
             self._buzzer_stop_timer.stop()
             self._buzzer_stop_timer = None
