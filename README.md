@@ -8,6 +8,7 @@ A professional, high-end lifestyle BJJ (Brazilian Jiu-Jitsu) gym timer built wit
 - **SPARRING Mode**: Adjustable work + rest + rounds
 - **Rotary Encoder Navigation**: Scroll menu, add/subtract 30s when running
 - **Chic UI**: Deep matte black (#121212), gold (#D4AF37), circular progress arc
+- **YouTube Music**: Click ♪ in top right to open playlist; scroll with wheel, select with press, long press to close
 
 ## Hardware Configuration (Raspberry Pi)
 
@@ -67,10 +68,12 @@ python main.py --alt
 
 ```
 timer-py/
-├── main.py        # Hardware init, gpiozero bridge, QML engine
-├── main.qml       # Default UI (gold accent, footer bar)
-├── main_alt.qml   # Alternative UI (green accent, header layout)
-├── TimerLogic.py  # BJJ state machine (modes, phases, timer logic)
+├── main.py           # Hardware init, gpiozero bridge, QML engine
+├── main.qml          # Default UI (gold accent, footer bar)
+├── main_alt.qml      # Alternative UI (green accent, header layout)
+├── MusicPanelWeb.qml # YouTube Music panel (WebView)
+├── MusicPanelSimple.qml  # Fallback when WebEngine not installed
+├── TimerLogic.py     # BJJ state machine (modes, phases, timer logic)
 ├── requirements.txt
 └── README.md
 ```

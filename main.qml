@@ -27,7 +27,10 @@ ApplicationWindow {
         anchors.fill: parent
         focus: true
         Keys.onPressed: function(event) {
-            if (hardwareBridge && hardwareBridge.is_mock()) {
+            if (musicController && musicController.musicPanelOpen && event.key === Qt.Key_Escape) {
+                musicController.close_music_panel()
+                event.accepted = true
+            } else if (hardwareBridge && hardwareBridge.is_mock()) {
                 if (event.key === Qt.Key_Up || event.key === Qt.Key_Plus) {
                     hardwareBridge.simulate_encoder_delta(1)
                     event.accepted = true
@@ -156,6 +159,26 @@ ApplicationWindow {
                 }
 
                 Item { Layout.fillWidth: true }
+
+                // Music button (top right)
+                Rectangle {
+                    Layout.preferredWidth: 40
+                    Layout.preferredHeight: 36
+                    color: "transparent"
+                    Layout.rightMargin: 12
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "♪"
+                        font.pixelSize: 20
+                        color: colorMuted
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: musicController.toggle_music_panel()
+                    }
+                }
 
                 // Right: clock
                 ColumnLayout {
@@ -478,5 +501,21 @@ ApplicationWindow {
         configView.visible = true
         timerView.visible = true
     }
+    }
+
+    // Music panel overlay (top right click opens)
+    Rectangle {
+        id: musicOverlay
+        anchors.fill: parent
+        color: Qt.rgba(0, 0, 0, 0.98)
+        visible: musicController && musicController.musicPanelOpen
+        z: 1000
+
+        Loader {
+            id: musicLoader
+            anchors.fill: parent
+            source: hasWebEngine ? "MusicPanelWeb.qml" : "MusicPanelSimple.qml"
+            asynchronous: true
+        }
     }
 }

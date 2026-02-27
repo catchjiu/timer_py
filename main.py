@@ -24,6 +24,12 @@ from PySide6.QtGui import QGuiApplication
 
 from TimerLogic import TimerLogic
 
+# YouTube Music playlist URL - set BJJ_MUSIC_PLAYLIST_URL or edit default
+MUSIC_PLAYLIST_URL = os.environ.get(
+    "BJJ_MUSIC_PLAYLIST_URL",
+    "https://music.youtube.com/playlist?list=PLwkD6brEPZlQA586imOMER_c8qhE7udhp&si=FN6PZQDKkDm6HAV3"
+)
+
 # GPIO Pin Definitions (BCM numbering)
 # Physical pins 11, 12, 13 = BCM 17, 18, 27
 PIN_CLK = 17   # Physical pin 11
@@ -441,6 +447,47 @@ class SensorProvider(QObject):
         self.timeString12hChanged.emit(self._time_string_12h)
 
 
+class MusicController(QObject):
+    """Controls music panel visibility and routes encoder/button when panel is open."""
+    musicPanelOpenChanged = Signal(bool)
+    musicScroll = Signal(int)   # delta: +1 down, -1 up
+    musicSelect = Signal()
+    musicClose = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._music_panel_open = False
+
+    def _get_music_panel_open(self):
+        return self._music_panel_open
+
+    def _set_music_panel_open(self, value):
+        if self._music_panel_open != value:
+            self._music_panel_open = value
+            self.musicPanelOpenChanged.emit(value)
+
+    musicPanelOpen = Property(bool, _get_music_panel_open, _set_music_panel_open, notify=musicPanelOpenChanged)
+
+    @Slot()
+    def toggle_music_panel(self):
+        self._set_music_panel_open(not self._music_panel_open)
+
+    @Slot()
+    def close_music_panel(self):
+        self._set_music_panel_open(False)
+
+    @Slot()
+    def open_playlist_in_browser(self):
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl(MUSIC_PLAYLIST_URL))
+
+    def _get_playlist_url(self):
+        return MUSIC_PLAYLIST_URL
+
+    playlistUrl = Property(str, _get_playlist_url)
+
+
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("BJJ Gym Timer")
@@ -455,10 +502,30 @@ def main():
     # Sensor provider
     sensor_provider = SensorProvider()
 
-    # Connect hardware to logic (QueuedConnection for cross-thread encoder callbacks)
-    hw_bridge.encoderDelta.connect(timer_logic.encoder_delta, Qt.ConnectionType.QueuedConnection)
-    hw_bridge.shortPress.connect(timer_logic.short_press)
-    hw_bridge.longPress.connect(timer_logic.long_press)
+    # Music controller (routes encoder/button when panel open)
+    music_controller = MusicController()
+
+    def route_encoder(delta):
+        if music_controller.musicPanelOpen:
+            music_controller.musicScroll.emit(delta)
+        else:
+            timer_logic.encoder_delta(delta)
+
+    def route_short_press():
+        if music_controller.musicPanelOpen:
+            music_controller.musicSelect.emit()
+        else:
+            timer_logic.short_press()
+
+    def route_long_press():
+        if music_controller.musicPanelOpen:
+            music_controller.close_music_panel()
+        else:
+            timer_logic.long_press()
+
+    hw_bridge.encoderDelta.connect(route_encoder, Qt.ConnectionType.QueuedConnection)
+    hw_bridge.shortPress.connect(route_short_press)
+    hw_bridge.longPress.connect(route_long_press)
 
     # Buzzer: single buzz on round start, two longer buzzes on round end
     def on_round_started():
@@ -470,12 +537,22 @@ def main():
     timer_logic.roundStarted.connect(on_round_started)
     timer_logic.roundEnded.connect(on_round_ended)
 
+    # WebEngine for music panel (YouTube Music)
+    try:
+        from PySide6.QtWebEngineQuick import QtWebEngineQuick
+        QtWebEngineQuick.initialize()
+        has_webengine = True
+    except ImportError:
+        has_webengine = False
+
     # QML engine - set context before load so bindings have access
     engine = QQmlApplicationEngine()
     root_ctx = engine.rootContext()
     root_ctx.setContextProperty("timerLogic", timer_logic)
     root_ctx.setContextProperty("hardwareBridge", hw_bridge)
     root_ctx.setContextProperty("sensorProvider", sensor_provider)
+    root_ctx.setContextProperty("musicController", music_controller)
+    root_ctx.setContextProperty("hasWebEngine", has_webengine)
 
     # Initial sensor data before QML loads (avoids null during first bind)
     sensor_provider.refresh()
