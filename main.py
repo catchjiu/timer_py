@@ -19,16 +19,69 @@ from urllib.error import URLError
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtQml import QQmlApplicationEngine
-from PySide6.QtCore import QUrl, QObject, Signal, Slot, Property, QTimer, Qt, QMetaObject
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtCore import QUrl, QObject, Signal, Slot, Property, QTimer, Qt, QMetaObject, QAbstractListModel, QModelIndex
+from PySide6.QtGui import QGuiApplication, QDesktopServices
 
 from TimerLogic import TimerLogic
 
-# YouTube Music playlist URL - set BJJ_MUSIC_PLAYLIST_URL or edit default
+# YouTube Music playlist - set BJJ_MUSIC_PLAYLIST_URL or edit default
 MUSIC_PLAYLIST_URL = os.environ.get(
     "BJJ_MUSIC_PLAYLIST_URL",
     "https://music.youtube.com/playlist?list=PLwkD6brEPZlQA586imOMER_c8qhE7udhp&si=FN6PZQDKkDm6HAV3"
 )
+
+
+def _extract_playlist_id(url: str) -> str:
+    """Extract playlist ID from YouTube Music URL."""
+    if "list=" in url:
+        start = url.find("list=") + 5
+        end = url.find("&", start)
+        return url[start:end] if end > 0 else url[start:]
+    return ""
+
+
+class MusicTrackModel(QAbstractListModel):
+    """List model for playlist tracks - roles: title, artists, videoId."""
+    TitleRole = Qt.ItemDataRole.UserRole + 1
+    ArtistsRole = Qt.ItemDataRole.UserRole + 2
+    VideoIdRole = Qt.ItemDataRole.UserRole + 3
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._tracks = []
+
+    def rowCount(self, parent=QModelIndex()):
+        return len(self._tracks) if not parent.isValid() else 0
+
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        if not index.isValid() or index.row() < 0 or index.row() >= len(self._tracks):
+            return None
+        track = self._tracks[index.row()]
+        if role == MusicTrackModel.TitleRole:
+            return track.get("title", "")
+        if role == MusicTrackModel.ArtistsRole:
+            arts = track.get("artists", [])
+            return ", ".join(a.get("name", "") for a in arts) if isinstance(arts, list) else str(arts)
+        if role == MusicTrackModel.VideoIdRole:
+            return track.get("videoId", "")
+        return None
+
+    def roleNames(self):
+        return {
+            MusicTrackModel.TitleRole: b"title",
+            MusicTrackModel.ArtistsRole: b"artists",
+            MusicTrackModel.VideoIdRole: b"videoId",
+        }
+
+    def set_tracks(self, tracks: list):
+        self.beginResetModel()
+        self._tracks = tracks or []
+        self.endResetModel()
+
+    def get_track(self, row: int) -> dict:
+        if 0 <= row < len(self._tracks):
+            return self._tracks[row]
+        return {}
 
 # GPIO Pin Definitions (BCM numbering)
 # Physical pins 11, 12, 13 = BCM 17, 18, 27
@@ -453,10 +506,16 @@ class MusicController(QObject):
     musicScroll = Signal(int)   # delta: +1 down, -1 up
     musicSelect = Signal()
     musicClose = Signal()
+    selectedIndexChanged = Signal()
+    trackCountChanged = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._music_panel_open = False
+        self._track_model = MusicTrackModel(self)
+        self._selected_index = 0
+        self._playlist_id = _extract_playlist_id(MUSIC_PLAYLIST_URL)
+        self._ytmusic = None
 
     def _get_music_panel_open(self):
         return self._music_panel_open
@@ -464,9 +523,53 @@ class MusicController(QObject):
     def _set_music_panel_open(self, value):
         if self._music_panel_open != value:
             self._music_panel_open = value
+            if value:
+                self._refresh_playlist()
             self.musicPanelOpenChanged.emit(value)
 
     musicPanelOpen = Property(bool, _get_music_panel_open, _set_music_panel_open, notify=musicPanelOpenChanged)
+
+    def _get_track_model(self):
+        return self._track_model
+
+    trackModel = Property(QObject, _get_track_model)
+
+    def _get_track_count(self):
+        return self._track_model.rowCount()
+
+    trackCount = Property(int, _get_track_count, notify=trackCountChanged)
+
+    def _get_selected_index(self):
+        return self._selected_index
+
+    def _set_selected_index(self, value):
+        count = self._track_model.rowCount()
+        if count == 0:
+            return
+        self._selected_index = max(0, min(value, count - 1))
+        self.selectedIndexChanged.emit()
+
+    selectedIndex = Property(int, _get_selected_index, _set_selected_index, notify=selectedIndexChanged)
+
+    def _refresh_playlist(self):
+        if not self._playlist_id:
+            return
+        try:
+            from ytmusicapi import YTMusic
+            if self._ytmusic is None:
+                self._ytmusic = YTMusic()
+            data = self._ytmusic.get_playlist(self._playlist_id)
+            tracks = data.get("tracks", [])
+            track_list = [t for t in tracks if t.get("videoId")]
+            self._track_model.set_tracks(track_list)
+            self._selected_index = 0
+            self.selectedIndexChanged.emit()
+            self.trackCountChanged.emit()
+        except Exception as e:
+            if os.environ.get("BJJ_DEBUG"):
+                print(f"[BJJ Timer] ytmusicapi: {e}", file=sys.stderr)
+            self._track_model.set_tracks([])
+            self.trackCountChanged.emit()
 
     @Slot()
     def toggle_music_panel(self):
@@ -478,14 +581,27 @@ class MusicController(QObject):
 
     @Slot()
     def open_playlist_in_browser(self):
-        from PySide6.QtGui import QDesktopServices
-        from PySide6.QtCore import QUrl
         QDesktopServices.openUrl(QUrl(MUSIC_PLAYLIST_URL))
+
+    @Slot()
+    def play_selected_track(self):
+        track = self._track_model.get_track(self._selected_index)
+        video_id = track.get("videoId")
+        if video_id:
+            QDesktopServices.openUrl(QUrl(f"https://music.youtube.com/watch?v={video_id}"))
 
     def _get_playlist_url(self):
         return MUSIC_PLAYLIST_URL
 
     playlistUrl = Property(str, _get_playlist_url)
+
+    @Slot(int)
+    def on_music_scroll(self, delta: int):
+        self._set_selected_index(self._selected_index - delta)
+
+    @Slot()
+    def on_music_select(self):
+        self.play_selected_track()
 
 
 def main():
@@ -507,13 +623,13 @@ def main():
 
     def route_encoder(delta):
         if music_controller.musicPanelOpen:
-            music_controller.musicScroll.emit(delta)
+            music_controller.on_music_scroll(delta)
         else:
             timer_logic.encoder_delta(delta)
 
     def route_short_press():
         if music_controller.musicPanelOpen:
-            music_controller.musicSelect.emit()
+            music_controller.on_music_select()
         else:
             timer_logic.short_press()
 
@@ -537,14 +653,6 @@ def main():
     timer_logic.roundStarted.connect(on_round_started)
     timer_logic.roundEnded.connect(on_round_ended)
 
-    # WebEngine for music panel (YouTube Music)
-    try:
-        from PySide6.QtWebEngineQuick import QtWebEngineQuick
-        QtWebEngineQuick.initialize()
-        has_webengine = True
-    except ImportError:
-        has_webengine = False
-
     # QML engine - set context before load so bindings have access
     engine = QQmlApplicationEngine()
     root_ctx = engine.rootContext()
@@ -552,7 +660,6 @@ def main():
     root_ctx.setContextProperty("hardwareBridge", hw_bridge)
     root_ctx.setContextProperty("sensorProvider", sensor_provider)
     root_ctx.setContextProperty("musicController", music_controller)
-    root_ctx.setContextProperty("hasWebEngine", has_webengine)
 
     # Initial sensor data before QML loads (avoids null during first bind)
     sensor_provider.refresh()

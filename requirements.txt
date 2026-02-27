@@ -3,7 +3,9 @@
 
 # Qt for Python (QML frontend)
 PySide6>=6.5.0
-PySide6-WebEngine>=6.5.0
+
+# YouTube Music API (works on Raspberry Pi)
+ytmusicapi>=1.0.0
 
 # Raspberry Pi GPIO (Pi 5 compatible)
 gpiozero>=2.0

@@ -514,7 +514,7 @@ ApplicationWindow {
         Loader {
             id: musicLoader
             anchors.fill: parent
-            source: hasWebEngine ? "MusicPanelWeb.qml" : "MusicPanelSimple.qml"
+            source: "MusicPanelYtmusic.qml"
             asynchronous: true
         }
     }
