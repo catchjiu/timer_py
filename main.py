@@ -73,7 +73,7 @@ class HardwareBridge(QObject):
 
             from gpiozero import RotaryEncoder, Button, TonalBuzzer
 
-            self._encoder = RotaryEncoder(clock=PIN_CLK, data=PIN_DT, wrap=True, max_steps=100)
+            self._encoder = RotaryEncoder(a=PIN_CLK, b=PIN_DT, wrap=True, max_steps=100)
             self._encoder.when_rotated_clockwise = lambda: self.encoderDelta.emit(1)
             self._encoder.when_rotated_counter_clockwise = lambda: self.encoderDelta.emit(-1)
 
