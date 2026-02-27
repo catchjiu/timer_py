@@ -139,18 +139,7 @@ ApplicationWindow {
 
                 Item { Layout.fillWidth: true }
 
-                // Academy name (center)
-                Text {
-                    text: "Catch Jiu Jitsu Academy"
-                    font.family: fontFamily
-                    font.pixelSize: 16
-                    font.weight: Font.DemiBold
-                    color: colorGold
-                }
-
-                Item { Layout.fillWidth: true }
-
-                // Clock
+                // Clock (right side, where GPIO was)
                 ColumnLayout {
                     spacing: 0
                     Text {
@@ -168,24 +157,6 @@ ApplicationWindow {
                         color: colorGold
                     }
                 }
-
-                // Mode badge
-                Rectangle {
-                    Layout.leftMargin: 12
-                    Layout.preferredWidth: 52
-                    Layout.preferredHeight: 22
-                    radius: 4
-                    color: hardwareBridge.is_mock() ? Qt.rgba(0.9, 0.5, 0.14, 0.25) : Qt.rgba(0.18, 0.8, 0.44, 0.25)
-                    border.width: 1
-                    border.color: hardwareBridge.is_mock() ? "#E67E22" : "#2ECC71"
-                    Text {
-                        anchors.centerIn: parent
-                        text: hardwareBridge.is_mock() ? "MOCK" : "GPIO"
-                        font.pixelSize: 10
-                        font.weight: Font.DemiBold
-                        color: hardwareBridge.is_mock() ? "#E67E22" : "#2ECC71"
-                    }
-                }
             }
         }
 
@@ -200,6 +171,15 @@ ApplicationWindow {
                 anchors.centerIn: parent
                 visible: timerLogic.mode === "main_menu"
                 spacing: 20
+
+                Text {
+                    text: "Catch Jiu Jitsu Academy"
+                    font.family: fontFamily
+                    font.pixelSize: 22
+                    font.weight: Font.DemiBold
+                    color: colorGold
+                    Layout.alignment: Qt.AlignHCenter
+                }
 
                 Repeater {
                     model: ["DRILLING", "SPARRING"]
