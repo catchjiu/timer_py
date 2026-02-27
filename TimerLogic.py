@@ -42,6 +42,8 @@ class TimerLogic(QObject):
     menuIndexChanged = Signal()
     switchAlertChanged = Signal()
     configStepChanged = Signal()
+    roundStarted = Signal()
+    roundEnded = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -294,6 +296,7 @@ class TimerLogic(QObject):
         self._set_state(TimerState.WORK)
         self._update_progress()
         self._timer.start(1000)
+        self.roundStarted.emit()
         self.displayTimeChanged.emit()
         self.progressChanged.emit()
         self.roundChanged.emit()
@@ -306,6 +309,7 @@ class TimerLogic(QObject):
         self._set_state(TimerState.WORK)
         self._update_progress()
         self._timer.start(1000)
+        self.roundStarted.emit()
         self.displayTimeChanged.emit()
         self.progressChanged.emit()
         self.roundChanged.emit()
@@ -340,6 +344,7 @@ class TimerLogic(QObject):
             self.switchAlertChanged.emit()
 
         if self._display_sec <= 0:
+            self.roundEnded.emit()
             self._current_round += 1
             self.roundChanged.emit()
             if self._current_round > self._drill_rounds:
@@ -352,11 +357,13 @@ class TimerLogic(QObject):
                 self._display_sec = self._drill_work_sec
                 self._total_sec = self._drill_work_sec
                 self._set_state(TimerState.WORK)
+                self.roundStarted.emit()
             self.displayTimeChanged.emit()
 
     def _tick_sparring(self):
         if self._display_sec <= 0:
             if self._state == TimerState.WORK:
+                self.roundEnded.emit()
                 # Last round: no rest, done
                 if self._current_round >= self._spar_rounds:
                     self._timer.stop()
@@ -372,6 +379,7 @@ class TimerLogic(QObject):
                 self._display_sec = self._spar_work_sec
                 self._total_sec = self._spar_work_sec
                 self._set_state(TimerState.WORK)
+                self.roundStarted.emit()
             self.displayTimeChanged.emit()
 
     def _set_state(self, value):

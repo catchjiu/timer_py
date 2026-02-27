@@ -290,12 +290,16 @@ def main():
     hw_bridge.shortPress.connect(timer_logic.short_press)
     hw_bridge.longPress.connect(timer_logic.long_press)
 
-    # Buzzer on "Switch!" alert
-    def on_switch_alert():
-        if timer_logic.switchAlert:
-            hw_bridge.play_tone(880, 150)
+    # Buzzer: single buzz on round start, two longer buzzes on round end
+    def on_round_started():
+        hw_bridge.play_tone(880, 100)
 
-    timer_logic.switchAlertChanged.connect(on_switch_alert)
+    def on_round_ended():
+        hw_bridge.play_tone(880, 400)
+        QTimer.singleShot(500, lambda: hw_bridge.play_tone(880, 400))
+
+    timer_logic.roundStarted.connect(on_round_started)
+    timer_logic.roundEnded.connect(on_round_ended)
 
     # QML engine
     engine = QQmlApplicationEngine()
