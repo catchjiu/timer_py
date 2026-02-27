@@ -13,6 +13,7 @@ import platform
 import time
 import json
 import re
+import random
 import subprocess
 from pathlib import Path
 from urllib.request import urlopen, Request
@@ -545,6 +546,7 @@ class MusicController(QObject):
     musicClose = Signal()
     selectedIndexChanged = Signal()
     trackCountChanged = Signal()
+    nowPlayingChanged = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -556,6 +558,8 @@ class MusicController(QObject):
         self._media_player = None
         self._audio_output = None
         self._player_process = None
+        self._now_playing_title = ""
+        self._now_playing_artist = ""
 
     def _get_music_panel_open(self):
         return self._music_panel_open
@@ -601,7 +605,8 @@ class MusicController(QObject):
             data = self._ytmusic.get_playlist(self._playlist_id)
             tracks = data.get("tracks", [])
             track_list = [t for t in tracks if t.get("videoId")]
-            self._track_model.set_tracks(track_list)
+            random_option = {"title": "Random", "artists": [{"name": "Shuffle playlist"}], "videoId": "RANDOM"}
+            self._track_model.set_tracks([random_option] + track_list)
             self._selected_index = 0
             self.selectedIndexChanged.emit()
             self.trackCountChanged.emit()
@@ -655,8 +660,24 @@ class MusicController(QObject):
                 print(f"[BJJ Timer] yt-dlp: {e}", file=sys.stderr)
             return None
 
+    def _set_now_playing(self, title: str, artist: str):
+        if self._now_playing_title != title or self._now_playing_artist != artist:
+            self._now_playing_title = title or ""
+            self._now_playing_artist = artist or ""
+            self.nowPlayingChanged.emit()
+
+    def _get_now_playing_title(self):
+        return self._now_playing_title
+
+    def _get_now_playing_artist(self):
+        return self._now_playing_artist
+
+    nowPlayingTitle = Property(str, _get_now_playing_title, notify=nowPlayingChanged)
+    nowPlayingArtist = Property(str, _get_now_playing_artist, notify=nowPlayingChanged)
+
     def _stop_playback(self):
         """Stop any active audio playback."""
+        self._set_now_playing("", "")
         if self._player_process is not None:
             try:
                 self._player_process.terminate()
@@ -677,7 +698,21 @@ class MusicController(QObject):
         if not video_id:
             return
         self._stop_playback()
+        # Random: pick a random track from the playlist (indices 1..N, excluding Random at 0)
+        if video_id == "RANDOM":
+            count = self._track_model.rowCount()
+            if count <= 1:
+                return
+            idx = random.randint(1, count - 1)
+            track = self._track_model.get_track(idx)
+            video_id = track.get("videoId")
+            if not video_id:
+                return
+        title = track.get("title", "")
+        artists = track.get("artists", [])
+        artist_str = ", ".join(a.get("name", "") for a in artists) if isinstance(artists, list) else str(artists)
         stream_url = self._extract_audio_url(video_id)
+        self._set_now_playing(title, artist_str)
         if not stream_url:
             # Fallback: open in browser
             QDesktopServices.openUrl(QUrl(f"https://music.youtube.com/watch?v={video_id}"))

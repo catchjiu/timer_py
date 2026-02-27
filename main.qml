@@ -163,23 +163,38 @@ ApplicationWindow {
 
                 Item { Layout.fillWidth: true }
 
-                // Music button (top right)
-                Rectangle {
-                    Layout.preferredWidth: 40
-                    Layout.preferredHeight: 36
-                    color: "transparent"
+                // Now playing + Music button (top right)
+                RowLayout {
+                    spacing: 8
                     Layout.rightMargin: 12
 
                     Text {
-                        anchors.centerIn: parent
-                        text: "♪"
-                        font.pixelSize: 20
+                        Layout.maximumWidth: 180
+                        text: musicController && (musicController.nowPlayingTitle || musicController.nowPlayingArtist)
+                            ? (musicController.nowPlayingArtist ? musicController.nowPlayingArtist + " – " : "") + musicController.nowPlayingTitle
+                            : ""
+                        font.pixelSize: 12
                         color: colorMuted
+                        elide: Text.ElideRight
+                        visible: text !== ""
                     }
 
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: musicController.toggle_music_panel()
+                    Rectangle {
+                        Layout.preferredWidth: 40
+                        Layout.preferredHeight: 36
+                        color: "transparent"
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "♪"
+                            font.pixelSize: 20
+                            color: colorMuted
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: musicController.toggle_music_panel()
+                        }
                     }
                 }
 
