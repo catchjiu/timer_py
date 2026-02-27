@@ -12,6 +12,7 @@ import os
 import platform
 import time
 import json
+import re
 from pathlib import Path
 from urllib.request import urlopen, Request
 from urllib.error import URLError
@@ -272,13 +273,17 @@ class HardwareBridge(QObject):
         self._encoder = self._button = self._buzzer = None
 
 
-# Kaohsiung, Taiwan: 3樓, No. 79號, Jhonghua 3rd Rd, Qianjin District
+# ESP32 Weather Station (temp + humidity)
+# Override with BJJ_ESP32_URL env var
+ESP32_WEATHER_URL = os.environ.get("BJJ_ESP32_URL", "http://35.201.220.212:5000/")
+
+# Kaohsiung, Taiwan - fallback for weather description only
 KAOHSIUNG_LAT = 22.6273
 KAOHSIUNG_LON = 120.3014
 OPEN_METEO_URL = (
     f"https://api.open-meteo.com/v1/forecast"
     f"?latitude={KAOHSIUNG_LAT}&longitude={KAOHSIUNG_LON}"
-    "&current=temperature_2m,relative_humidity_2m,weather_code"
+    "&current=weather_code"
 )
 
 # WMO weather codes -> short description
@@ -296,7 +301,8 @@ WEATHER_DESC = {
 class SensorProvider(QObject):
     """
     Provides Temperature, Humidity, Weather, and System Time.
-    Uses Open-Meteo API for Kaohsiung, Taiwan (no API key).
+    Temp/humidity from ESP32 at http://35.201.220.212:5000/
+    Weather description from Open-Meteo (fallback).
     """
 
     tempChanged = Signal(float)
@@ -314,22 +320,66 @@ class SensorProvider(QObject):
         self._time_string_12h = "12:00 AM"
         self._location = "Kaohsiung"
 
+    def _fetch_esp32(self) -> bool:
+        """Fetch temp and humidity from ESP32 weather station. Returns True on success."""
+        for path in ["", "/api", "/data", "/sensors"]:
+            try:
+                url = ESP32_WEATHER_URL.rstrip("/") + path
+                req = Request(url, headers={"User-Agent": "BJJ-Timer/1.0"})
+                with urlopen(req, timeout=5) as resp:
+                    raw = resp.read().decode()
+            except (URLError, OSError) as e:
+                if os.environ.get("BJJ_DEBUG"):
+                    print(f"[BJJ Timer] ESP32 fetch {url}: {e}", file=sys.stderr)
+                continue
+            # Try to parse JSON
+            data = None
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                # Try embedded JSON in HTML
+                for m in re.finditer(r'\{[^{}]*(?:"temperature"|"temp"|"humidity"|"hum")[^{}]*\}', raw):
+                    try:
+                        data = json.loads(m.group(0))
+                        break
+                    except json.JSONDecodeError:
+                        pass
+            if data is None:
+                # Scrape numbers from HTML (e.g. "Temperature 27.7°C", "Humidity 49.7%")
+                t_match = re.search(r'[Tt]emperature[^0-9]*(\d+\.?\d*)', raw)
+                h_match = re.search(r'[Hh]umidity[^0-9]*(\d+\.?\d*)', raw)
+                if t_match:
+                    self._temp = float(t_match.group(1))
+                if h_match:
+                    self._humidity = float(h_match.group(1))
+                if t_match or h_match:
+                    return True
+                continue
+            # Flexible key names
+            t = data.get("temperature") or data.get("temp") or data.get("Temperature") or data.get("Temp")
+            h = data.get("humidity") or data.get("hum") or data.get("Humidity") or data.get("Hum")
+            if t is not None:
+                self._temp = float(t)
+            if h is not None:
+                self._humidity = float(h)
+            if t is not None or h is not None:
+                return True
+        return False
+
     def _fetch_weather(self) -> bool:
-        """Fetch weather from Open-Meteo. Returns True on success."""
+        """Fetch temp/humidity from ESP32, weather description from Open-Meteo."""
+        esp_ok = self._fetch_esp32()
+        # Weather description from Open-Meteo (optional)
         try:
             req = Request(OPEN_METEO_URL, headers={"User-Agent": "BJJ-Timer/1.0"})
-            with urlopen(req, timeout=8) as resp:
+            with urlopen(req, timeout=5) as resp:
                 data = json.loads(resp.read().decode())
-        except (URLError, json.JSONDecodeError, OSError) as e:
-            if os.environ.get("BJJ_DEBUG"):
-                print(f"[BJJ Timer] Weather fetch failed: {e}", file=sys.stderr)
-            return False
-        cur = data.get("current", {})
-        self._temp = cur.get("temperature_2m", self._temp)
-        self._humidity = cur.get("relative_humidity_2m", self._humidity)
-        code = cur.get("weather_code", 0)
-        self._weather_description = WEATHER_DESC.get(code, "—")
-        return True
+            code = data.get("current", {}).get("weather_code", 0)
+            self._weather_description = WEATHER_DESC.get(code, "—")
+        except (URLError, json.JSONDecodeError, OSError):
+            if not esp_ok:
+                self._weather_description = "Local"
+        return esp_ok
 
     def get_time_string(self) -> str:
         from datetime import datetime
