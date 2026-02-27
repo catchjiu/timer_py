@@ -45,6 +45,10 @@ ApplicationWindow {
         }
     }
 
+    Item {
+        id: contentRoot
+        anchors.fill: parent
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 24
@@ -279,7 +283,7 @@ ApplicationWindow {
         }
     }
 
-    // Transitions between views
+    // Transitions between views (on Item, not ApplicationWindow)
     states: [
         State {
             name: "menu"
@@ -302,5 +306,6 @@ ApplicationWindow {
     Component.onCompleted: {
         menuView.visible = true
         timerView.visible = true
+    }
     }
 }
