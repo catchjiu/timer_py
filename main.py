@@ -173,6 +173,46 @@ class HardwareBridge(QObject):
                 pass
         self.buzzerBeep.emit(frequency_hz, duration_ms)
 
+    def play_two_buzzes(self, frequency_hz: int = 880, duration_ms: int = 400, gap_ms: int = 150):
+        """Play two buzzes with gap - second starts only after first fully stops."""
+        if self._buzzer_stop_timer is not None:
+            self._buzzer_stop_timer.stop()
+            self._buzzer_stop_timer = None
+        self._stop_buzzer()
+        if not (hasattr(self, "_lgpio_handle") and self._lgpio_handle is not None):
+            return
+        try:
+            import lgpio
+            lgpio.tx_pwm(self._lgpio_handle, PIN_BUZZER, frequency_hz, 50)
+            self._buzzer_stop_timer = QTimer(self)
+            self._buzzer_stop_timer.setSingleShot(True)
+            self._buzzer_stop_timer.timeout.connect(
+                lambda: self._on_first_buzz_done(frequency_hz, duration_ms, gap_ms)
+            )
+            self._buzzer_stop_timer.start(duration_ms)
+        except Exception:
+            pass
+
+    def _on_first_buzz_done(self, frequency_hz: int, duration_ms: int, gap_ms: int):
+        """Called when first buzz ends - stop, wait gap, play second."""
+        self._buzzer_stop_timer = None
+        self._stop_buzzer()
+        QTimer.singleShot(gap_ms, lambda: self._play_second_buzz(frequency_hz, duration_ms))
+
+    def _play_second_buzz(self, frequency_hz: int, duration_ms: int):
+        """Play second buzz of the pair."""
+        self._stop_buzzer()
+        if hasattr(self, "_lgpio_handle") and self._lgpio_handle is not None:
+            try:
+                import lgpio
+                lgpio.tx_pwm(self._lgpio_handle, PIN_BUZZER, frequency_hz, 50)
+                self._buzzer_stop_timer = QTimer(self)
+                self._buzzer_stop_timer.setSingleShot(True)
+                self._buzzer_stop_timer.timeout.connect(self._stop_buzzer)
+                self._buzzer_stop_timer.start(duration_ms)
+            except Exception:
+                pass
+
     @Slot()
     def _stop_buzzer(self):
         self._buzzer_stop_timer = None
@@ -314,8 +354,7 @@ def main():
         hw_bridge.play_tone(880, 100)
 
     def on_round_ended():
-        hw_bridge.play_tone(880, 400)
-        QTimer.singleShot(550, lambda: hw_bridge.play_tone(880, 400))  # 400ms buzz + 150ms gap
+        hw_bridge.play_two_buzzes(880, 400, 150)  # Two buzzes, second starts after first stops
 
     timer_logic.roundStarted.connect(on_round_started)
     timer_logic.roundEnded.connect(on_round_ended)
