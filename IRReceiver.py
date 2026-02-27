@@ -78,6 +78,21 @@ _EVDEV_MAP = {
     "KEY_LEFT": (IR_DOWN, None), "KEY_RIGHT": (IR_UP, None),
 }
 
+# NEC scancode -> (action, payload) - for remotes that only emit EV_MSC (no keymap loaded)
+# Layout from your remote (0x44,0x40,0x43,0x07,0x15,0x09 = numbers); common 44-key style
+_SCANCODE_MAP = {
+    0x45: (IR_DIGIT, 0), 0x46: (IR_DIGIT, 1), 0x47: (IR_DIGIT, 2),
+    0x44: (IR_DIGIT, 3), 0x40: (IR_DIGIT, 4), 0x43: (IR_DIGIT, 5),
+    0x07: (IR_DIGIT, 6), 0x15: (IR_DIGIT, 7), 0x09: (IR_DIGIT, 8),
+    0x16: (IR_DIGIT, 9),
+    # OK / Select (often 0x1C or similar on these remotes)
+    0x1C: (IR_SELECT, None), 0x0D: (IR_SELECT, None),
+    # Back / Exit
+    0x0B: (IR_BACK, None), 0x0E: (IR_BACK, None),
+    # Up / Down
+    0x5B: (IR_UP, None), 0x5C: (IR_DOWN, None),
+}
+
 # Maps lirc key names (from lircd) to our actions
 _LIRC_MAP = {
     "KEY_0": (IR_DIGIT, 0), "KEY_1": (IR_DIGIT, 1), "KEY_2": (IR_DIGIT, 2),
@@ -164,6 +179,13 @@ class IRReceiver:
                     except (KeyError, TypeError):
                         continue
                     mapped = _evdev_key_to_action(code_str)
+                    if mapped:
+                        action, payload = mapped
+                        self._emit(action, payload)
+                elif event.type == evdev.ecodes.EV_MSC and event.code == evdev.ecodes.MSC_SCAN:
+                    # No keymap loaded - kernel only sends scancodes; map them ourselves
+                    scancode = event.value
+                    mapped = _SCANCODE_MAP.get(scancode)
                     if mapped:
                         action, payload = mapped
                         self._emit(action, payload)
