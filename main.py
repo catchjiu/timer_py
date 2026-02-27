@@ -717,7 +717,17 @@ class MusicController(QObject):
             # Fallback: open in browser
             QDesktopServices.openUrl(QUrl(f"https://music.youtube.com/watch?v={video_id}"))
             return
-        # Try Qt Multimedia first
+        # Prefer mpv: handles YouTube streams reliably; Qt Multimedia often fails with demuxer errors
+        try:
+            self._player_process = subprocess.Popen(
+                ["mpv", "--no-video", "--no-terminal", "--really-quiet", stream_url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return
+        except FileNotFoundError:
+            pass  # mpv not installed, try Qt
+        # Fallback: Qt Multimedia (set BJJ_USE_QT_AUDIO=1 to prefer Qt over mpv)
         try:
             from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
             if self._media_player is None:
@@ -726,20 +736,9 @@ class MusicController(QObject):
                 self._media_player.setAudioOutput(self._audio_output)
             self._media_player.setSource(QUrl(stream_url))
             self._media_player.play()
-            return
         except Exception as e:
             if os.environ.get("BJJ_DEBUG"):
                 print(f"[BJJ Timer] QMediaPlayer: {e}", file=sys.stderr)
-        # Fallback: mpv subprocess (audio only, no window)
-        try:
-            self._player_process = subprocess.Popen(
-                ["mpv", "--no-video", "--no-terminal", "--really-quiet", stream_url],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        except FileNotFoundError:
-            if os.environ.get("BJJ_DEBUG"):
-                print("[BJJ Timer] mpv not found, opening in browser", file=sys.stderr)
             QDesktopServices.openUrl(QUrl(f"https://music.youtube.com/watch?v={video_id}"))
 
     def _get_playlist_url(self):

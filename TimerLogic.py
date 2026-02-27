@@ -250,7 +250,11 @@ class TimerLogic(QObject):
     def _config_adjust(self, delta: int):
         """Adjust config value based on current step."""
         if self._config_step == 0:  # Work time
-            adj = 30 * delta
+            work_sec = self._drill_work_sec if self._mode == TimerMode.CONFIG_DRILLING else self._spar_work_sec
+            if work_sec < 120:  # Under 2 mins: step by 10 sec
+                adj = 10 * delta
+            else:  # 2 mins or more: step by 30 sec
+                adj = 30 * delta
             if self._mode == TimerMode.CONFIG_DRILLING:
                 self._drill_work_sec = max(30, min(self._drill_work_sec + adj, 60 * 60))
             else:
