@@ -16,8 +16,8 @@ ApplicationWindow {
     readonly property color colorGold: "#D4AF37"
     readonly property color colorWhite: "#FFFFFF"
     readonly property color colorMuted: "#888888"
-    readonly property real arcStroke: 4
-    readonly property real arcRadius: 160
+    readonly property real arcStroke: 6
+    readonly property real arcRadius: 220
 
     // Roboto Light fallback: use system light font
     readonly property string fontFamily: "Segoe UI Light"
@@ -226,18 +226,18 @@ ApplicationWindow {
             Layout.fillHeight: true
             Layout.margins: 24
             // --- MAIN MENU ---
-            ColumnLayout {
+            Column {
                 id: menuView
                 anchors.centerIn: parent
                 visible: timerLogic.mode === "main_menu"
-                spacing: 20
+                spacing: 24
 
                 Repeater {
                     model: ["DRILLING", "SPARRING"]
                     delegate: Rectangle {
-                        width: 280
-                        height: 56
-                        radius: 8
+                        width: 400
+                        height: 80
+                        radius: 12
                         color: (timerLogic && index === timerLogic.menuIndex) ? Qt.rgba(0.83, 0.69, 0.22, 0.25) : "transparent"
                         border.width: (timerLogic && index === timerLogic.menuIndex) ? 2 : 1
                         border.color: (timerLogic && index === timerLogic.menuIndex) ? colorGold : colorMuted
@@ -249,7 +249,7 @@ ApplicationWindow {
                             anchors.centerIn: parent
                             text: modelData
                             font.family: fontFamily
-                            font.pixelSize: 20
+                            font.pixelSize: 28
                             color: (timerLogic && index === timerLogic.menuIndex) ? colorGold : colorWhite
                         }
 
@@ -262,16 +262,6 @@ ApplicationWindow {
                         }
                     }
                 }
-
-                Text {
-                    text: hardwareBridge && hardwareBridge.is_mock()
-                        ? "MOCK MODE: ▲▼ scroll  •  SPACE select  •  ESC back  •  M playlist"
-                        : "Turn to scroll  •  Press to select  •  Long press back  •  Triple press playlist"
-                    font.pixelSize: 11
-                    color: (hardwareBridge && hardwareBridge.is_mock()) ? "#E67E22" : colorMuted
-                    Layout.alignment: Qt.AlignHCenter
-                    Layout.topMargin: 12
-                }
             }
 
             // --- CONFIG VIEW (Work / Rest-Switch / Rounds) ---
@@ -279,59 +269,59 @@ ApplicationWindow {
                 id: configView
                 anchors.centerIn: parent
                 visible: timerLogic && (timerLogic.mode === "config_drilling" || timerLogic.mode === "config_sparring")
-                spacing: 16
+                spacing: 24
 
                 Text {
                     text: (timerLogic && timerLogic.mode === "config_drilling") ? "DRILLING SETUP" : "SPARRING SETUP"
                     font.family: fontFamily
-                    font.pixelSize: 22
+                    font.pixelSize: 32
                     color: colorGold
                     Layout.alignment: Qt.AlignHCenter
                 }
 
                 RowLayout {
-                    Layout.preferredWidth: 320
-                    spacing: 12
-                    Text { text: "Work time:"; font.pixelSize: 16; color: (timerLogic && timerLogic.configStep === 0) ? colorGold : colorMuted; Layout.preferredWidth: 140 }
+                    Layout.preferredWidth: 420
+                    spacing: 20
+                    Text { text: "Work time:"; font.pixelSize: 22; color: (timerLogic && timerLogic.configStep === 0) ? colorGold : colorMuted; Layout.preferredWidth: 180 }
                     Text {
                         text: timerLogic ? (Math.floor(timerLogic.configWorkSec / 60) + ":" + (timerLogic.configWorkSec % 60 < 10 ? "0" : "") + (timerLogic.configWorkSec % 60)) : "0:00"
-                        font.pixelSize: 18
+                        font.pixelSize: 26
                         font.weight: (timerLogic && timerLogic.configStep === 0) ? Font.DemiBold : Font.Normal
                         color: colorWhite
                     }
                 }
                 RowLayout {
-                    Layout.preferredWidth: 320
-                    spacing: 12
+                    Layout.preferredWidth: 420
+                    spacing: 20
                     Text {
                         text: (timerLogic && timerLogic.mode === "config_drilling") ? "Switch time:" : "Rest time:"
-                        font.pixelSize: 16
+                        font.pixelSize: 22
                         color: (timerLogic && timerLogic.configStep === 1) ? colorGold : colorMuted
-                        Layout.preferredWidth: 140
+                        Layout.preferredWidth: 180
                     }
                     Text {
                         text: timerLogic ? (Math.floor(timerLogic.configRestSwitchSec / 60) + ":" + (timerLogic.configRestSwitchSec % 60 < 10 ? "0" : "") + (timerLogic.configRestSwitchSec % 60)) : "0:00"
-                        font.pixelSize: 18
+                        font.pixelSize: 26
                         font.weight: (timerLogic && timerLogic.configStep === 1) ? Font.DemiBold : Font.Normal
                         color: colorWhite
                     }
                 }
                 RowLayout {
-                    Layout.preferredWidth: 320
-                    spacing: 12
-                    Text { text: "Rounds:"; font.pixelSize: 16; color: (timerLogic && timerLogic.configStep === 2) ? colorGold : colorMuted; Layout.preferredWidth: 140 }
+                    Layout.preferredWidth: 420
+                    spacing: 20
+                    Text { text: "Rounds:"; font.pixelSize: 22; color: (timerLogic && timerLogic.configStep === 2) ? colorGold : colorMuted; Layout.preferredWidth: 180 }
                     Text {
                         text: timerLogic ? timerLogic.configRounds : 1
-                        font.pixelSize: 18
+                        font.pixelSize: 26
                         font.weight: (timerLogic && timerLogic.configStep === 2) ? Font.DemiBold : Font.Normal
                         color: colorWhite
                     }
                 }
 
                 Rectangle {
-                    Layout.preferredWidth: 280
-                    Layout.preferredHeight: 44
-                    radius: 8
+                    Layout.preferredWidth: 360
+                    Layout.preferredHeight: 56
+                    radius: 12
                     color: (timerLogic && timerLogic.configStep === 3) ? Qt.rgba(0.83, 0.69, 0.22, 0.3) : "transparent"
                     border.width: (timerLogic && timerLogic.configStep === 3) ? 2 : 1
                     border.color: (timerLogic && timerLogic.configStep === 3) ? colorGold : colorMuted
@@ -339,7 +329,7 @@ ApplicationWindow {
                     Text {
                         anchors.centerIn: parent
                         text: (timerLogic && timerLogic.configStep === 3) ? "READY – Press to START" : "Press to confirm"
-                        font.pixelSize: 14
+                        font.pixelSize: 18
                         color: (timerLogic && timerLogic.configStep === 3) ? colorGold : colorMuted
                     }
                 }
@@ -413,10 +403,10 @@ ApplicationWindow {
                     id: phaseLabel
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.bottom: clockDisplay.top
-                    anchors.bottomMargin: 8
+                    anchors.bottomMargin: 12
                     text: timerLogic ? timerLogic.phaseLabel : ""
                     font.family: fontFamily
-                    font.pixelSize: 14
+                    font.pixelSize: 18
                     color: (timerLogic && timerLogic.switchAlert) ? colorGold : colorMuted
                     opacity: (timerLogic && timerLogic.phaseLabel) ? 1 : 0
 
@@ -430,7 +420,7 @@ ApplicationWindow {
                     anchors.centerIn: parent
                     text: timerLogic ? timerLogic.displayTime : "00:00"
                     font.family: fontFamily
-                    font.pixelSize: 96
+                    font.pixelSize: 120
                     font.weight: Font.Light
                     color: colorWhite
 
@@ -441,9 +431,9 @@ ApplicationWindow {
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.top: clockDisplay.bottom
-                    anchors.topMargin: 12
+                    anchors.topMargin: 16
                     text: timerLogic ? ("Round %1 / %2".arg(timerLogic.currentRound).arg(timerLogic.totalRounds)) : "Round 0 / 0"
-                    font.pixelSize: 14
+                    font.pixelSize: 18
                     color: colorMuted
                 }
 
@@ -459,7 +449,7 @@ ApplicationWindow {
                     Text {
                         anchors.centerIn: parent
                         text: "PAUSED"
-                        font.pixelSize: 32
+                        font.pixelSize: 48
                         color: colorGold
                     }
                 }
@@ -476,7 +466,7 @@ ApplicationWindow {
                     Text {
                         anchors.centerIn: parent
                         text: "SWITCH!"
-                        font.pixelSize: 48
+                        font.pixelSize: 64
                         font.weight: Font.Bold
                         color: colorGold
                     }
