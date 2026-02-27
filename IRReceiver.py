@@ -222,8 +222,11 @@ class IRReceiver:
         import evdev
         try:
             dev.grab()  # Exclusive access - prevents other apps (e.g. desktop) from consuming IR
-        except (OSError, IOError):
-            pass  # Grab may fail if already grabbed or no permission
+            if os.environ.get("BJJ_DEBUG"):
+                print("[BJJ Timer] IR device grabbed", file=sys.stderr)
+        except (OSError, IOError) as e:
+            if os.environ.get("BJJ_DEBUG"):
+                print(f"[BJJ Timer] IR device grab failed: {e}", file=sys.stderr)
         try:
             for event in dev.read_loop():
                 if self._stop.is_set():
@@ -236,6 +239,8 @@ class IRReceiver:
                     mapped = _evdev_key_to_action(code_str)
                     if mapped:
                         action, payload = mapped
+                        if os.environ.get("BJJ_DEBUG"):
+                            print(f"[BJJ Timer] IR EV_KEY {code_str} -> {action}({payload})", file=sys.stderr)
                         self._emit(action, payload)
                 elif event.type == evdev.ecodes.EV_MSC and event.code == evdev.ecodes.MSC_SCAN:
                     # No keymap loaded - kernel only sends scancodes; map them ourselves
@@ -244,8 +249,12 @@ class IRReceiver:
                     mapped = scancode_map.get(raw)
                     if not mapped and raw > 0xFF:
                         mapped = scancode_map.get(raw & 0xFF)  # Try lower 8 bits
-                    if os.environ.get("BJJ_DEBUG") and not mapped:
-                        print(f"[BJJ Timer] IR scancode 0x{raw:x} (dec {raw}) not mapped", file=sys.stderr)
+                    if os.environ.get("BJJ_DEBUG"):
+                        if mapped:
+                            action, payload = mapped
+                            print(f"[BJJ Timer] IR 0x{raw:x} -> {action}({payload})", file=sys.stderr)
+                        else:
+                            print(f"[BJJ Timer] IR scancode 0x{raw:x} (dec {raw}) not mapped", file=sys.stderr)
                     if mapped:
                         action, payload = mapped
                         self._emit(action, payload)
