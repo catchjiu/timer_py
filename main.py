@@ -15,7 +15,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtQml import QQmlApplicationEngine
-from PySide6.QtCore import QUrl, QObject, Signal, Slot, Property, QTimer
+from PySide6.QtCore import QUrl, QObject, Signal, Slot, Property, QTimer, Qt
 from PySide6.QtGui import QGuiApplication
 
 from TimerLogic import TimerLogic
@@ -25,6 +25,9 @@ PIN_CLK = 11
 PIN_DT = 12
 PIN_SW = 13
 PIN_BUZZER = 16  # PWM-capable pin
+
+# Set True if rotary doesn't respond (swap CLK/DT)
+SWAP_ENCODER_PINS = False
 
 # Long press threshold (ms)
 LONG_PRESS_MS = 800
@@ -73,9 +76,10 @@ class HardwareBridge(QObject):
 
             from gpiozero import RotaryEncoder, Button, TonalBuzzer
 
-            self._encoder = RotaryEncoder(a=PIN_CLK, b=PIN_DT, wrap=True, max_steps=100)
-            self._encoder.when_rotated_clockwise = lambda: self.encoderDelta.emit(1)
-            self._encoder.when_rotated_counter_clockwise = lambda: self.encoderDelta.emit(-1)
+            a_pin, b_pin = (PIN_DT, PIN_CLK) if SWAP_ENCODER_PINS else (PIN_CLK, PIN_DT)
+            self._encoder = RotaryEncoder(a=a_pin, b=b_pin, wrap=True, max_steps=100)
+            self._encoder.when_rotated_clockwise = lambda: self._on_encoder(1)
+            self._encoder.when_rotated_counter_clockwise = lambda: self._on_encoder(-1)
 
             self._button = Button(PIN_SW)
             self._button.when_pressed = self._on_button_pressed
@@ -90,6 +94,12 @@ class HardwareBridge(QObject):
             print(f"[BJJ Timer] GPIO init failed: {e}", file=sys.stderr)
             print("[BJJ Timer] Running in MOCK mode - use keyboard: ↑↓ scroll, SPACE select, ESC back", file=sys.stderr)
             return False
+
+    def _on_encoder(self, delta: int):
+        """Encoder callback - runs in gpiozero thread, emit to main thread."""
+        if os.environ.get("BJJ_DEBUG"):
+            print(f"[BJJ Timer] Encoder: {delta:+d}", file=sys.stderr)
+        self.encoderDelta.emit(delta)
 
     def _on_button_pressed(self):
         self._sw_press_time = time.monotonic()
@@ -240,8 +250,8 @@ def main():
     # Sensor provider
     sensor_provider = SensorProvider()
 
-    # Connect hardware to logic
-    hw_bridge.encoderDelta.connect(timer_logic.encoder_delta)
+    # Connect hardware to logic (QueuedConnection for cross-thread encoder callbacks)
+    hw_bridge.encoderDelta.connect(timer_logic.encoder_delta, Qt.ConnectionType.QueuedConnection)
     hw_bridge.shortPress.connect(timer_logic.short_press)
     hw_bridge.longPress.connect(timer_logic.long_press)
 

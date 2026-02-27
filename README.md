@@ -29,6 +29,12 @@ sudo usermod -aG gpio $USER
 # Log out and back in, or reboot
 ```
 
+**If GPIO shows green but rotary still doesn't respond:**
+1. Run with debug to see if encoder events are received: `BJJ_DEBUG=1 python main.py`
+2. If you see "Encoder: +1" or "Encoder: -1" when turning, the wiring is fine—the issue is elsewhere.
+3. If you see nothing when turning, try swapping CLK and DT wires, or set `SWAP_ENCODER_PINS = True` in `main.py`.
+4. Verify wiring: CLK→GPIO11, DT→GPIO12, SW→GPIO13, VCC→3.3V, GND→GND.
+
 ## Installation
 
 ```bash
