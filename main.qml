@@ -56,10 +56,22 @@ ApplicationWindow {
 
         // --- INFO BAR (Top) ---
         Rectangle {
+            id: topBar
             Layout.fillWidth: true
             Layout.preferredHeight: 44
             color: Qt.rgba(0, 0, 0, 0.35)
             radius: 0
+
+            // Academy name - centered on screen (overlay)
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.verticalCenter: parent.verticalCenter
+                text: "CATCH JIU JITSU ACADEMY"
+                font.family: fontFamily
+                font.pixelSize: 16
+                font.weight: Font.DemiBold
+                color: colorGold
+            }
 
             RowLayout {
                 anchors.fill: parent
@@ -70,7 +82,7 @@ ApplicationWindow {
 
                 // Left: weather, temp, humidity
                 RowLayout {
-                    Layout.fillWidth: true
+                    Layout.maximumWidth: 280
                     spacing: 20
 
                 // Weather & location
@@ -143,20 +155,11 @@ ApplicationWindow {
                 }
                 }
 
-                // Center: academy name (aligned with drilling/sparring below)
-                Text {
-                    text: "CATCH JIU JITSU ACADEMY"
-                    font.family: fontFamily
-                    font.pixelSize: 16
-                    font.weight: Font.DemiBold
-                    color: colorGold
-                    Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignHCenter
-                }
+                Item { Layout.fillWidth: true }
 
                 // Right: clock
                 ColumnLayout {
-                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignRight
                     spacing: 0
                     Text {
                         text: "TIME"

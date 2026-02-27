@@ -322,47 +322,48 @@ class SensorProvider(QObject):
 
     def _fetch_esp32(self) -> bool:
         """Fetch temp and humidity from ESP32 weather station. Returns True on success."""
-        for path in ["", "/api", "/data", "/sensors"]:
+        url_base = ESP32_WEATHER_URL.rstrip("/") or "http://35.201.220.212:5000"
+        if not url_base.startswith("http"):
+            url_base = "http://" + url_base
+        for path in ["/", "/api", "/data", "/sensors"]:
+            url = url_base.rstrip("/") + path
             try:
-                url = ESP32_WEATHER_URL.rstrip("/") + path
                 req = Request(url, headers={"User-Agent": "BJJ-Timer/1.0"})
-                with urlopen(req, timeout=5) as resp:
+                with urlopen(req, timeout=8) as resp:
                     raw = resp.read().decode()
             except (URLError, OSError) as e:
                 if os.environ.get("BJJ_DEBUG"):
                     print(f"[BJJ Timer] ESP32 fetch {url}: {e}", file=sys.stderr)
                 continue
-            # Try to parse JSON
+            # Try JSON first
             data = None
             try:
                 data = json.loads(raw)
             except json.JSONDecodeError:
-                # Try embedded JSON in HTML
                 for m in re.finditer(r'\{[^{}]*(?:"temperature"|"temp"|"humidity"|"hum")[^{}]*\}', raw):
                     try:
                         data = json.loads(m.group(0))
                         break
                     except json.JSONDecodeError:
                         pass
-            if data is None:
-                # Scrape numbers from HTML (e.g. "Temperature 27.7°C", "Humidity 49.7%")
-                t_match = re.search(r'[Tt]emperature[^0-9]*(\d+\.?\d*)', raw)
-                h_match = re.search(r'[Hh]umidity[^0-9]*(\d+\.?\d*)', raw)
-                if t_match:
-                    self._temp = float(t_match.group(1))
-                if h_match:
-                    self._humidity = float(h_match.group(1))
-                if t_match or h_match:
+            if data is not None:
+                t = data.get("temperature") or data.get("temp") or data.get("Temperature") or data.get("Temp")
+                h = data.get("humidity") or data.get("hum") or data.get("Humidity") or data.get("Hum")
+                if t is not None:
+                    self._temp = float(t)
+                if h is not None:
+                    self._humidity = float(h)
+                if t is not None or h is not None:
                     return True
                 continue
-            # Flexible key names
-            t = data.get("temperature") or data.get("temp") or data.get("Temperature") or data.get("Temp")
-            h = data.get("humidity") or data.get("hum") or data.get("Humidity") or data.get("Hum")
-            if t is not None:
-                self._temp = float(t)
-            if h is not None:
-                self._humidity = float(h)
-            if t is not None or h is not None:
+            # Scrape HTML: "Temperature" / "27.5°C", "Humidity" / "49.4%"
+            t_match = re.search(r'[Tt]emperature[^0-9]*(\d+\.?\d*)', raw)
+            h_match = re.search(r'[Hh]umidity[^0-9]*(\d+\.?\d*)', raw)
+            if t_match:
+                self._temp = float(t_match.group(1))
+            if h_match:
+                self._humidity = float(h_match.group(1))
+            if t_match or h_match:
                 return True
         return False
 
