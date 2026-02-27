@@ -220,6 +220,7 @@ class HardwareBridge(QObject):
             try:
                 import lgpio
                 lgpio.tx_pwm(self._lgpio_handle, PIN_BUZZER, 0, 0)  # Stop PWM
+                lgpio.gpio_write(self._lgpio_handle, PIN_BUZZER, 0)  # Force pin low
             except Exception:
                 pass
 

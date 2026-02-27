@@ -4,7 +4,7 @@ Senior Embedded Software Architecture
 """
 
 from enum import Enum
-from PySide6.QtCore import QObject, Signal, Property, QTimer
+from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot
 
 
 class TimerMode(Enum):
@@ -374,7 +374,7 @@ class TimerLogic(QObject):
                         self._display_sec = self._drill_work_sec
                         self._total_sec = self._drill_work_sec
                         self._set_state(TimerState.WORK)
-                        self.roundStarted.emit()
+                        QTimer.singleShot(1000, self._emit_round_started)  # Delay so double buzz finishes
             elif self._state == TimerState.REST:
                 # Switch/rest done → P2 work
                 self._drill_half = 2
@@ -402,7 +402,7 @@ class TimerLogic(QObject):
                     self._display_sec = self._spar_work_sec
                     self._total_sec = self._spar_work_sec
                     self._set_state(TimerState.WORK)
-                    self.roundStarted.emit()
+                    QTimer.singleShot(1000, self._emit_round_started)  # Delay so double buzz finishes
             elif self._state == TimerState.REST:
                 self._current_round += 1
                 self.roundChanged.emit()
@@ -415,3 +415,7 @@ class TimerLogic(QObject):
     def _set_state(self, value):
         self._state = value
         self.stateChanged.emit()
+
+    @Slot()
+    def _emit_round_started(self):
+        self.roundStarted.emit()
