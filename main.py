@@ -310,6 +310,7 @@ class SensorProvider(QObject):
     weatherDescriptionChanged = Signal(str)
     timeStringChanged = Signal(str)
     timeString12hChanged = Signal(str)
+    locationChanged = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -411,7 +412,7 @@ class SensorProvider(QObject):
     timeString12h = Property(str, _get_time_string_12h, notify=timeString12hChanged)
 
     def _get_location(self): return self._location
-    location = Property(str, _get_location)
+    location = Property(str, _get_location, notify=locationChanged)
 
     def refresh(self):
         """Full refresh: fetch weather and update time."""
