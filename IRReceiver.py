@@ -9,7 +9,9 @@ Custom mapping: create ir_scancodes.json next to main.py, e.g.:
 """
 
 import json
+import os
 import platform
+import sys
 import threading
 import time
 from pathlib import Path
@@ -119,7 +121,7 @@ def _load_scancode_map():
                 with open(cfg, "r") as f:
                     custom = json.load(f)
                 for k, v in custom.items():
-                    if k.startswith("0x"):
+                    if isinstance(k, str) and k.startswith("0x"):
                         sc = int(k, 16)
                     else:
                         sc = int(k)
@@ -135,8 +137,9 @@ def _load_scancode_map():
                             result[sc] = (IR_UP, None)
                         elif v in ("down", "left"):
                             result[sc] = (IR_DOWN, None)
-            except Exception:
-                pass
+            except Exception as e:
+                if os.environ.get("BJJ_DEBUG"):
+                    print(f"[BJJ Timer] ir_scancodes.json error: {e}", file=sys.stderr)
             break
     return result
 
@@ -218,6 +221,10 @@ class IRReceiver:
     def _run_evdev(self, dev):
         import evdev
         try:
+            dev.grab()  # Exclusive access - prevents other apps (e.g. desktop) from consuming IR
+        except (OSError, IOError):
+            pass  # Grab may fail if already grabbed or no permission
+        try:
             for event in dev.read_loop():
                 if self._stop.is_set():
                     break
@@ -232,14 +239,23 @@ class IRReceiver:
                         self._emit(action, payload)
                 elif event.type == evdev.ecodes.EV_MSC and event.code == evdev.ecodes.MSC_SCAN:
                     # No keymap loaded - kernel only sends scancodes; map them ourselves
-                    scancode = event.value
-                    mapped = _load_scancode_map().get(scancode)
+                    raw = event.value
+                    scancode_map = _load_scancode_map()
+                    mapped = scancode_map.get(raw)
+                    if not mapped and raw > 0xFF:
+                        mapped = scancode_map.get(raw & 0xFF)  # Try lower 8 bits
+                    if os.environ.get("BJJ_DEBUG") and not mapped:
+                        print(f"[BJJ Timer] IR scancode 0x{raw:x} (dec {raw}) not mapped", file=sys.stderr)
                     if mapped:
                         action, payload = mapped
                         self._emit(action, payload)
         except (OSError, IOError):
             pass
         finally:
+            try:
+                dev.ungrab()
+            except Exception:
+                pass
             try:
                 dev.close()
             except Exception:
