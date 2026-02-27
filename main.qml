@@ -147,7 +147,7 @@ ApplicationWindow {
                     Layout.preferredWidth: 320
                     spacing: 12
                     Text {
-                        text: (timerLogic.mode === "config_drilling" ? "Switch interval:" : "Rest time:")
+                        text: "Rest time:"
                         font.pixelSize: 16
                         color: timerLogic.configStep === 1 ? colorGold : colorMuted
                         Layout.preferredWidth: 140

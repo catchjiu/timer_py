@@ -151,6 +151,7 @@ class HardwareBridge(QObject):
             if self._buzzer_stop_timer is not None:
                 self._buzzer_stop_timer.stop()
                 self._buzzer_stop_timer = None
+            self._stop_buzzer()  # Stop any current tone before starting new one
             try:
                 from gpiozero.tones import Tone
                 self._buzzer.play(Tone(frequency_hz))
@@ -296,7 +297,7 @@ def main():
 
     def on_round_ended():
         hw_bridge.play_tone(880, 400)
-        QTimer.singleShot(500, lambda: hw_bridge.play_tone(880, 400))
+        QTimer.singleShot(550, lambda: hw_bridge.play_tone(880, 400))  # 400ms buzz + 150ms gap
 
     timer_logic.roundStarted.connect(on_round_started)
     timer_logic.roundEnded.connect(on_round_ended)

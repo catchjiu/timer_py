@@ -52,9 +52,9 @@ class TimerLogic(QObject):
         self._mode = TimerMode.MAIN_MENU
         self._state = TimerState.IDLE
 
-        # DRILLING: work period, switch alert, rounds
-        self._drill_work_sec = 180  # 3 min default
-        self._drill_switch_sec = 30  # "Switch!" every 30s
+        # DRILLING: work, rest, rounds (same structure as sparring)
+        self._drill_work_sec = 60   # 1 min default
+        self._drill_rest_sec = 30   # 30 sec rest
         self._drill_rounds = 3
 
         # SPARRING: work, rest, rounds
@@ -175,7 +175,7 @@ class TimerLogic(QObject):
         return self._drill_work_sec if self._mode == TimerMode.CONFIG_DRILLING else self._spar_work_sec
 
     def _get_config_rest_switch_sec(self):
-        return self._drill_switch_sec if self._mode == TimerMode.CONFIG_DRILLING else self._spar_rest_sec
+        return self._drill_rest_sec if self._mode == TimerMode.CONFIG_DRILLING else self._spar_rest_sec
 
     def _get_config_rounds(self):
         return self._drill_rounds if self._mode == TimerMode.CONFIG_DRILLING else self._spar_rounds
@@ -222,10 +222,10 @@ class TimerLogic(QObject):
                 self._drill_work_sec = max(30, min(self._drill_work_sec + adj, 60 * 60))
             else:
                 self._spar_work_sec = max(30, min(self._spar_work_sec + adj, 60 * 60))
-        elif self._config_step == 1:  # Rest or Switch time
+        elif self._config_step == 1:  # Rest time
             adj = 15 * delta
             if self._mode == TimerMode.CONFIG_DRILLING:
-                self._drill_switch_sec = max(15, min(self._drill_switch_sec + adj, 120))
+                self._drill_rest_sec = max(0, min(self._drill_rest_sec + adj, 600))
             else:
                 self._spar_rest_sec = max(0, min(self._spar_rest_sec + adj, 600))
         else:  # Rounds
@@ -333,27 +333,37 @@ class TimerLogic(QObject):
         self._update_progress()
 
     def _tick_drilling(self):
-        remaining_in_cycle = self._display_sec % self._drill_switch_sec
-        # Last round: no switch alerts
-        is_last_round = self._current_round == self._drill_rounds
-        if not is_last_round and remaining_in_cycle == 0 and self._display_sec > 0:
-            self._switch_alert = True
-            self.switchAlertChanged.emit()
+        # Switch alert: visual only during work (no buzz)
+        if self._state == TimerState.WORK and self._display_sec > 0:
+            remaining = self._display_sec % 30  # Every 30s
+            self._switch_alert = (remaining == 0)
         else:
             self._switch_alert = False
-            self.switchAlertChanged.emit()
+        self.switchAlertChanged.emit()
 
         if self._display_sec <= 0:
-            self.roundEnded.emit()
-            self._current_round += 1
-            self.roundChanged.emit()
-            if self._current_round > self._drill_rounds:
-                self._timer.stop()
-                self._display_sec = 0
-                self._set_state(TimerState.IDLE)
-                self._switch_alert = False
-                self.switchAlertChanged.emit()
-            else:
+            if self._state == TimerState.WORK:
+                self.roundEnded.emit()
+                if self._current_round >= self._drill_rounds:
+                    self._timer.stop()
+                    self._display_sec = 0
+                    self._set_state(TimerState.IDLE)
+                    self._switch_alert = False
+                    self.switchAlertChanged.emit()
+                elif self._drill_rest_sec > 0:
+                    self._display_sec = self._drill_rest_sec
+                    self._total_sec = self._drill_rest_sec
+                    self._set_state(TimerState.REST)
+                else:
+                    self._current_round += 1
+                    self.roundChanged.emit()
+                    self._display_sec = self._drill_work_sec
+                    self._total_sec = self._drill_work_sec
+                    self._set_state(TimerState.WORK)
+                    self.roundStarted.emit()
+            elif self._state == TimerState.REST:
+                self._current_round += 1
+                self.roundChanged.emit()
                 self._display_sec = self._drill_work_sec
                 self._total_sec = self._drill_work_sec
                 self._set_state(TimerState.WORK)
@@ -364,15 +374,21 @@ class TimerLogic(QObject):
         if self._display_sec <= 0:
             if self._state == TimerState.WORK:
                 self.roundEnded.emit()
-                # Last round: no rest, done
                 if self._current_round >= self._spar_rounds:
                     self._timer.stop()
                     self._display_sec = 0
                     self._set_state(TimerState.IDLE)
-                else:
+                elif self._spar_rest_sec > 0:
                     self._display_sec = self._spar_rest_sec
                     self._total_sec = self._spar_rest_sec
                     self._set_state(TimerState.REST)
+                else:
+                    self._current_round += 1
+                    self.roundChanged.emit()
+                    self._display_sec = self._spar_work_sec
+                    self._total_sec = self._spar_work_sec
+                    self._set_state(TimerState.WORK)
+                    self.roundStarted.emit()
             elif self._state == TimerState.REST:
                 self._current_round += 1
                 self.roundChanged.emit()
