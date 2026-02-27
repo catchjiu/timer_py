@@ -211,7 +211,7 @@ class IRReceiver:
     def _emit(self, action: str, payload):
         now = time.monotonic()
         if now - self._last_key_time < self._cooldown:
-            return
+            return  # Dropped by cooldown
         self._last_key_time = now
         try:
             self._callback(action, payload)

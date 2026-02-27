@@ -119,23 +119,21 @@ class HardwareBridge(QObject):
             return False
 
     def _init_ir(self):
-        """Initialize IR receiver (evdev or lircd). Emits to main thread via QMetaObject."""
+        """Initialize IR receiver (evdev or lircd). Emits to main thread via QTimer.singleShot."""
         if platform.system() != "Linux":
             return
         def _on_ir(action, payload):
+            # QTimer.singleShot(0, fn) posts to main thread - Q_ARG doesn't work reliably in PySide6
             if action == IR_DIGIT:
-                QMetaObject.invokeMethod(self, "_emit_ir_digit", Qt.ConnectionType.QueuedConnection,
-                                          QMetaObject.Q_ARG(int, payload))
+                QTimer.singleShot(0, lambda p=payload: self._emit_ir_digit(p))
             elif action == IR_SELECT:
-                QMetaObject.invokeMethod(self, "_emit_ir_select", Qt.ConnectionType.QueuedConnection)
+                QTimer.singleShot(0, self._emit_ir_select)
             elif action == IR_BACK:
-                QMetaObject.invokeMethod(self, "_emit_ir_back", Qt.ConnectionType.QueuedConnection)
+                QTimer.singleShot(0, self._emit_ir_back)
             elif action == IR_UP:
-                QMetaObject.invokeMethod(self, "_emit_ir_encoder", Qt.ConnectionType.QueuedConnection,
-                                          QMetaObject.Q_ARG(int, 1))
+                QTimer.singleShot(0, lambda: self._emit_ir_encoder(1))
             elif action == IR_DOWN:
-                QMetaObject.invokeMethod(self, "_emit_ir_encoder", Qt.ConnectionType.QueuedConnection,
-                                          QMetaObject.Q_ARG(int, -1))
+                QTimer.singleShot(0, lambda: self._emit_ir_encoder(-1))
         self._ir_receiver = IRReceiver(_on_ir)
         if self._ir_receiver.start():
             if os.environ.get("BJJ_DEBUG"):

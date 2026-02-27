@@ -3,6 +3,8 @@ BJJ Gym Timer - State Machine Logic
 Senior Embedded Software Architecture
 """
 
+import os
+import sys
 from enum import Enum
 from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot
 
@@ -214,6 +216,8 @@ class TimerLogic(QObject):
     # --- IR remote handlers ---
     def ir_digit(self, digit: int):
         """Append digit to buffer for config entry. Apply on OK press."""
+        if os.environ.get("BJJ_DEBUG"):
+            print(f"[BJJ Timer] ir_digit({digit}) mode={self._mode.value}", file=sys.stderr)
         if self._mode not in (TimerMode.CONFIG_DRILLING, TimerMode.CONFIG_SPARRING):
             return
         if self._config_step == 0 or self._config_step == 1:  # Work or rest time
@@ -285,6 +289,8 @@ class TimerLogic(QObject):
 
     def ir_encoder_delta(self, delta: int):
         """IR Up/Down - same as rotary encoder."""
+        if os.environ.get("BJJ_DEBUG"):
+            print(f"[BJJ Timer] ir_encoder_delta({delta:+d}) mode={self._mode.value}", file=sys.stderr)
         self._clear_digit_buffer()
         self.encoder_delta(delta)
 
