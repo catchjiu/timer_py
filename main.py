@@ -120,13 +120,18 @@ class HardwareBridge(QObject):
             return False
 
     def _init_ir(self):
-        """Initialize IR receiver (evdev or lircd). Queue + invokeMethod to cross to main thread."""
+        """Initialize IR receiver (evdev or lircd). Use invokeMethod for select/back; queue for digit/encoder."""
         if platform.system() != "Linux":
             return
         self._ir_queue = Queue()
         def _on_ir(action, payload):
-            self._ir_queue.put((action, payload))
-            QMetaObject.invokeMethod(self, "_drain_one_ir", Qt.ConnectionType.QueuedConnection)
+            if action == IR_SELECT:
+                QMetaObject.invokeMethod(self, "_emit_ir_select", Qt.ConnectionType.QueuedConnection)
+            elif action == IR_BACK:
+                QMetaObject.invokeMethod(self, "_emit_ir_back", Qt.ConnectionType.QueuedConnection)
+            else:
+                self._ir_queue.put((action, payload))
+                QMetaObject.invokeMethod(self, "_drain_one_ir", Qt.ConnectionType.QueuedConnection)
         self._ir_receiver = IRReceiver(_on_ir)
         if self._ir_receiver.start():
             if os.environ.get("BJJ_DEBUG"):
@@ -143,10 +148,6 @@ class HardwareBridge(QObject):
             print(f"[BJJ Timer] drain_ir {action} {payload}", file=sys.stderr)
         if action == IR_DIGIT:
             self.irDigit.emit(payload)
-        elif action == IR_SELECT:
-            self.irSelect.emit()
-        elif action == IR_BACK:
-            self.irBack.emit()
         elif action == IR_UP:
             self.irEncoderDelta.emit(1)
         elif action == IR_DOWN:

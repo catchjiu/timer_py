@@ -220,13 +220,16 @@ class IRReceiver:
 
     def _run_evdev(self, dev):
         import evdev
-        try:
-            dev.grab()  # Exclusive access - prevents other apps from consuming IR
-            if os.environ.get("BJJ_DEBUG"):
-                print("[BJJ Timer] IR device grabbed", file=sys.stderr)
-        except (OSError, IOError) as e:
-            if os.environ.get("BJJ_DEBUG"):
-                print(f"[BJJ Timer] IR device grab failed (continuing without grab): {e}", file=sys.stderr)
+        grabbed = False
+        if not os.environ.get("BJJ_NO_GRAB"):
+            try:
+                dev.grab()
+                grabbed = True
+                if os.environ.get("BJJ_DEBUG"):
+                    print("[BJJ Timer] IR device grabbed", file=sys.stderr)
+            except (OSError, IOError) as e:
+                if os.environ.get("BJJ_DEBUG"):
+                    print(f"[BJJ Timer] IR grab failed (try BJJ_NO_GRAB=1): {e}", file=sys.stderr)
         try:
             for event in dev.read_loop():
                 if self._stop.is_set():
@@ -264,10 +267,11 @@ class IRReceiver:
             if os.environ.get("BJJ_DEBUG"):
                 print(f"[BJJ Timer] IR read_loop error: {e}", file=sys.stderr)
         finally:
-            try:
-                dev.ungrab()
-            except Exception:
-                pass
+            if grabbed:
+                try:
+                    dev.ungrab()
+                except Exception:
+                    pass
             try:
                 dev.close()
             except Exception:
