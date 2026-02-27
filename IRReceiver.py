@@ -245,6 +245,8 @@ class IRReceiver:
                 elif event.type == evdev.ecodes.EV_MSC and event.code == evdev.ecodes.MSC_SCAN:
                     # No keymap loaded - kernel only sends scancodes; map them ourselves
                     raw = event.value
+                    if os.environ.get("BJJ_DEBUG"):
+                        print(f"[BJJ Timer] IR raw 0x{raw:x}", file=sys.stderr)
                     scancode_map = _load_scancode_map()
                     mapped = scancode_map.get(raw)
                     if not mapped and raw > 0xFF:

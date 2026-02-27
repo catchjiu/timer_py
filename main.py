@@ -141,6 +141,8 @@ class HardwareBridge(QObject):
                 action, payload = self._ir_queue.get_nowait()
             except Exception:
                 break
+            if os.environ.get("BJJ_DEBUG"):
+                print(f"[BJJ Timer] process_ir {action} {payload}", file=sys.stderr)
             if action == IR_DIGIT:
                 self.irDigit.emit(payload)
             elif action == IR_SELECT:
