@@ -4,7 +4,7 @@ Senior Embedded Software Architecture
 
 Hardware: gpiozero (Pi 5 compatible; uses LGPIOFactory)
 - Rotary Encoder: CLK→phys 11 (BCM 17), DT→phys 12 (BCM 18), SW→phys 13 (BCM 27)
-- Passive Buzzer: BCM 16 (physical 36)
+- Passive Buzzer: BCM 23 (physical 16); 2=5V, 14=GND
 """
 
 import sys
@@ -25,7 +25,7 @@ from TimerLogic import TimerLogic
 PIN_CLK = 17   # Physical pin 11
 PIN_DT = 18    # Physical pin 12
 PIN_SW = 27    # Physical pin 13
-PIN_BUZZER = 16  # Physical pin 36 (PWM)
+PIN_BUZZER = 23  # Physical pin 16 (PWM); 2=5V, 14=GND
 
 # Set True if rotary doesn't respond (swap CLK/DT)
 SWAP_ENCODER_PINS = False

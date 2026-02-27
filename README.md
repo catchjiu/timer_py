@@ -14,7 +14,7 @@ A professional, high-end lifestyle BJJ (Brazilian Jiu-Jitsu) gym timer built wit
 | Component      | Physical Pins | BCM (GPIO) | Notes                    |
 |----------------|---------------|------------|--------------------------|
 | Rotary Encoder | CLK→11, DT→12, SW→13 | 17, 18, 27 | VCC→1 (3.3V), GND→6 |
-| Passive Buzzer | 36            | 16         | PWM-capable              |
+| Passive Buzzer | 16 (signal)   | 23         | 2=5V, 14=GND, 16=signal   |
 
 Uses **gpiozero** (Pi 5 compatible via LGPIOFactory). No daemon required.
 

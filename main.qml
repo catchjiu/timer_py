@@ -117,11 +117,82 @@ ApplicationWindow {
                 }
             }
 
+            // --- CONFIG VIEW (Work / Rest-Switch / Rounds) ---
+            ColumnLayout {
+                id: configView
+                anchors.centerIn: parent
+                visible: timerLogic.mode === "config_drilling" || timerLogic.mode === "config_sparring"
+                spacing: 16
+
+                Text {
+                    text: timerLogic.mode === "config_drilling" ? "DRILLING SETUP" : "SPARRING SETUP"
+                    font.family: fontFamily
+                    font.pixelSize: 22
+                    color: colorGold
+                    Layout.alignment: Qt.AlignHCenter
+                }
+
+                RowLayout {
+                    Layout.preferredWidth: 320
+                    spacing: 12
+                    Text { text: "Work time:"; font.pixelSize: 16; color: timerLogic.configStep === 0 ? colorGold : colorMuted; Layout.preferredWidth: 140 }
+                    Text {
+                        text: Math.floor(timerLogic.configWorkSec / 60) + ":" + (timerLogic.configWorkSec % 60 < 10 ? "0" : "") + (timerLogic.configWorkSec % 60)
+                        font.pixelSize: 18
+                        font.weight: timerLogic.configStep === 0 ? Font.DemiBold : Font.Normal
+                        color: colorWhite
+                    }
+                }
+                RowLayout {
+                    Layout.preferredWidth: 320
+                    spacing: 12
+                    Text {
+                        text: (timerLogic.mode === "config_drilling" ? "Switch interval:" : "Rest time:")
+                        font.pixelSize: 16
+                        color: timerLogic.configStep === 1 ? colorGold : colorMuted
+                        Layout.preferredWidth: 140
+                    }
+                    Text {
+                        text: Math.floor(timerLogic.configRestSwitchSec / 60) + ":" + (timerLogic.configRestSwitchSec % 60 < 10 ? "0" : "") + (timerLogic.configRestSwitchSec % 60)
+                        font.pixelSize: 18
+                        font.weight: timerLogic.configStep === 1 ? Font.DemiBold : Font.Normal
+                        color: colorWhite
+                    }
+                }
+                RowLayout {
+                    Layout.preferredWidth: 320
+                    spacing: 12
+                    Text { text: "Rounds:"; font.pixelSize: 16; color: timerLogic.configStep === 2 ? colorGold : colorMuted; Layout.preferredWidth: 140 }
+                    Text {
+                        text: timerLogic.configRounds
+                        font.pixelSize: 18
+                        font.weight: timerLogic.configStep === 2 ? Font.DemiBold : Font.Normal
+                        color: colorWhite
+                    }
+                }
+
+                Rectangle {
+                    Layout.preferredWidth: 280
+                    Layout.preferredHeight: 44
+                    radius: 8
+                    color: timerLogic.configStep === 3 ? Qt.rgba(0.83, 0.69, 0.22, 0.3) : "transparent"
+                    border.width: timerLogic.configStep === 3 ? 2 : 1
+                    border.color: timerLogic.configStep === 3 ? colorGold : colorMuted
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: timerLogic.configStep === 3 ? "READY – Press to START" : "Press to confirm"
+                        font.pixelSize: 14
+                        color: timerLogic.configStep === 3 ? colorGold : colorMuted
+                    }
+                }
+            }
+
             // --- TIMER VIEW (Drilling / Sparring) ---
             Item {
                 id: timerView
                 anchors.fill: parent
-                visible: timerLogic.mode !== "main_menu"
+                visible: timerLogic.mode === "drilling" || timerLogic.mode === "sparring"
 
                 // Circular progress arc (depletes clockwise from top)
                 Shape {
@@ -209,15 +280,14 @@ ApplicationWindow {
                     Behavior on text { PropertyAnimation { duration: 100 } }
                 }
 
-                // Round indicator (Sparring only)
+                // Round indicator
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.top: clockDisplay.bottom
                     anchors.topMargin: 12
-                    text: timerLogic.mode === "sparring" ? "Round %1 / %2".arg(timerLogic.currentRound).arg(timerLogic.totalRounds) : ""
+                    text: "Round %1 / %2".arg(timerLogic.currentRound).arg(timerLogic.totalRounds)
                     font.pixelSize: 14
                     color: colorMuted
-                    visible: timerLogic.mode === "sparring"
                 }
 
                 // Pause overlay
@@ -297,12 +367,21 @@ ApplicationWindow {
             name: "menu"
             when: timerLogic.mode === "main_menu"
             PropertyChanges { target: menuView; opacity: 1 }
+            PropertyChanges { target: configView; opacity: 0 }
+            PropertyChanges { target: timerView; opacity: 0 }
+        },
+        State {
+            name: "config"
+            when: timerLogic.mode === "config_drilling" || timerLogic.mode === "config_sparring"
+            PropertyChanges { target: menuView; opacity: 0 }
+            PropertyChanges { target: configView; opacity: 1 }
             PropertyChanges { target: timerView; opacity: 0 }
         },
         State {
             name: "timer"
-            when: timerLogic.mode !== "main_menu"
+            when: timerLogic.mode === "drilling" || timerLogic.mode === "sparring"
             PropertyChanges { target: menuView; opacity: 0 }
+            PropertyChanges { target: configView; opacity: 0 }
             PropertyChanges { target: timerView; opacity: 1 }
         }
     ]
@@ -313,6 +392,7 @@ ApplicationWindow {
 
     Component.onCompleted: {
         menuView.visible = true
+        configView.visible = true
         timerView.visible = true
     }
     }
