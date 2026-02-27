@@ -7,6 +7,9 @@ PySide6>=6.5.0
 # YouTube Music API (works on Raspberry Pi)
 ytmusicapi>=1.0.0
 
+# Extract audio stream URLs for in-app playback
+yt-dlp>=2024.1.0
+
 # Raspberry Pi GPIO (Pi 5 compatible)
 gpiozero>=2.0
 lgpio>=0.2.0; sys_platform == "linux"

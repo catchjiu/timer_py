@@ -13,6 +13,7 @@ import platform
 import time
 import json
 import re
+import subprocess
 from pathlib import Path
 from urllib.request import urlopen, Request
 from urllib.error import URLError
@@ -96,6 +97,9 @@ SWAP_ENCODER_PINS = False
 # Long press threshold (ms)
 LONG_PRESS_MS = 800
 
+# Triple press window (ms) - 3 short presses within this time
+TRIPLE_PRESS_MS = 600
+
 
 class HardwareBridge(QObject):
     """
@@ -108,6 +112,7 @@ class HardwareBridge(QObject):
 
     shortPress = Signal()
     longPress = Signal()
+    triplePress = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -116,6 +121,8 @@ class HardwareBridge(QObject):
         self._buzzer = None
         self._long_press_timer = None
         self._buzzer_stop_timer = None
+        self._triple_count = 0
+        self._triple_timer = None
         self._use_mock = platform.system() != "Linux" or not self._init_gpiozero()
 
     def _init_gpiozero(self) -> bool:
@@ -215,8 +222,33 @@ class HardwareBridge(QObject):
             self._long_press_timer.stop()
             self._long_press_timer = None
         if not self._long_press_fired and self._sw_press_time is not None:
-            self.shortPress.emit()
+            self._on_short_press_detected()
         self._sw_press_time = None
+
+    def _on_short_press_detected(self):
+        """Handle short press with triple-press detection."""
+        self._triple_count += 1
+        if self._triple_count == 1:
+            self._triple_timer = QTimer(self)
+            self._triple_timer.setSingleShot(True)
+            self._triple_timer.timeout.connect(self._on_triple_window_expired)
+            self._triple_timer.start(TRIPLE_PRESS_MS)
+        if self._triple_count >= 3:
+            if self._triple_timer is not None:
+                self._triple_timer.stop()
+                self._triple_timer = None
+            self._triple_count = 0
+            self.triplePress.emit()
+            return
+        # If we get here with count 2, timer will fire and emit 1 or 2 shortPress
+
+    @Slot()
+    def _on_triple_window_expired(self):
+        """Triple-press window closed - emit deferred short presses."""
+        self._triple_timer = None
+        for _ in range(self._triple_count):
+            self.shortPress.emit()
+        self._triple_count = 0
 
     def play_tone(self, frequency_hz: int, duration_ms: int):
         """Play a tone via lgpio PWM. Must be called from main thread."""
@@ -301,6 +333,11 @@ class HardwareBridge(QObject):
     def simulate_long_press(self):
         """Simulate long press (for mock/dev mode)."""
         self.longPress.emit()
+
+    @Slot()
+    def simulate_triple_press(self):
+        """Simulate triple press (for mock/dev mode)."""
+        self.triplePress.emit()
 
     @Slot(result=bool)
     def is_mock(self) -> bool:
@@ -516,6 +553,9 @@ class MusicController(QObject):
         self._selected_index = 0
         self._playlist_id = _extract_playlist_id(MUSIC_PLAYLIST_URL)
         self._ytmusic = None
+        self._media_player = None
+        self._audio_output = None
+        self._player_process = None
 
     def _get_music_panel_open(self):
         return self._music_panel_open
@@ -583,11 +623,88 @@ class MusicController(QObject):
     def open_playlist_in_browser(self):
         QDesktopServices.openUrl(QUrl(MUSIC_PLAYLIST_URL))
 
+    def _extract_audio_url(self, video_id: str) -> str | None:
+        """Extract direct audio stream URL via yt-dlp. Returns None on failure."""
+        try:
+            import yt_dlp
+            url = f"https://music.youtube.com/watch?v={video_id}"
+            opts = {
+                "format": "bestaudio/best",
+                "quiet": True,
+                "no_warnings": True,
+                "noplaylist": True,
+                "extract_flat": False,
+            }
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                if not info:
+                    return None
+                # Direct URL (single format)
+                u = info.get("url")
+                if u:
+                    return u
+                # DASH: use first requested format
+                fmts = info.get("requested_formats") or info.get("formats", [])
+                for f in fmts:
+                    u = f.get("url")
+                    if u:
+                        return u
+            return None
+        except Exception as e:
+            if os.environ.get("BJJ_DEBUG"):
+                print(f"[BJJ Timer] yt-dlp: {e}", file=sys.stderr)
+            return None
+
+    def _stop_playback(self):
+        """Stop any active audio playback."""
+        if self._player_process is not None:
+            try:
+                self._player_process.terminate()
+                self._player_process.wait(timeout=2)
+            except Exception:
+                pass
+            self._player_process = None
+        if self._media_player is not None:
+            try:
+                self._media_player.stop()
+            except Exception:
+                pass
+
     @Slot()
     def play_selected_track(self):
         track = self._track_model.get_track(self._selected_index)
         video_id = track.get("videoId")
-        if video_id:
+        if not video_id:
+            return
+        self._stop_playback()
+        stream_url = self._extract_audio_url(video_id)
+        if not stream_url:
+            # Fallback: open in browser
+            QDesktopServices.openUrl(QUrl(f"https://music.youtube.com/watch?v={video_id}"))
+            return
+        # Try Qt Multimedia first
+        try:
+            from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+            if self._media_player is None:
+                self._audio_output = QAudioOutput(self)
+                self._media_player = QMediaPlayer(self)
+                self._media_player.setAudioOutput(self._audio_output)
+            self._media_player.setSource(QUrl(stream_url))
+            self._media_player.play()
+            return
+        except Exception as e:
+            if os.environ.get("BJJ_DEBUG"):
+                print(f"[BJJ Timer] QMediaPlayer: {e}", file=sys.stderr)
+        # Fallback: mpv subprocess (audio only, no window)
+        try:
+            self._player_process = subprocess.Popen(
+                ["mpv", "--no-video", "--no-terminal", "--really-quiet", stream_url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except FileNotFoundError:
+            if os.environ.get("BJJ_DEBUG"):
+                print("[BJJ Timer] mpv not found, opening in browser", file=sys.stderr)
             QDesktopServices.openUrl(QUrl(f"https://music.youtube.com/watch?v={video_id}"))
 
     def _get_playlist_url(self):
@@ -642,6 +759,11 @@ def main():
     hw_bridge.encoderDelta.connect(route_encoder, Qt.ConnectionType.QueuedConnection)
     hw_bridge.shortPress.connect(route_short_press)
     hw_bridge.longPress.connect(route_long_press)
+
+    def on_triple_press():
+        music_controller.toggle_music_panel()
+
+    hw_bridge.triplePress.connect(on_triple_press)
 
     # Buzzer: single buzz on round start, two longer buzzes on round end
     def on_round_started():

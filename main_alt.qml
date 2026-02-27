@@ -27,7 +27,10 @@ ApplicationWindow {
         anchors.fill: parent
         focus: true
         Keys.onPressed: function(event) {
-            if (hardwareBridge.is_mock()) {
+            if (musicController && musicController.musicPanelOpen && event.key === Qt.Key_Escape) {
+                musicController.close_music_panel()
+                event.accepted = true
+            } else if (hardwareBridge.is_mock()) {
                 if (event.key === Qt.Key_Up || event.key === Qt.Key_Plus) {
                     hardwareBridge.simulate_encoder_delta(1)
                     event.accepted = true
@@ -39,6 +42,9 @@ ApplicationWindow {
                     event.accepted = true
                 } else if (event.key === Qt.Key_Escape || event.key === Qt.Key_Backspace) {
                     hardwareBridge.simulate_long_press()
+                    event.accepted = true
+                } else if (event.key === Qt.Key_M && !(event.modifiers & Qt.ControlModifier)) {
+                    hardwareBridge.simulate_triple_press()
                     event.accepted = true
                 }
             }
@@ -177,8 +183,8 @@ ApplicationWindow {
 
                 Text {
                     text: hardwareBridge.is_mock()
-                        ? "MOCK: ▲▼ scroll  •  SPACE select  •  ESC back"
-                        : "Turn to scroll  •  Press to select  •  Long press to back"
+                        ? "MOCK: ▲▼ scroll  •  SPACE select  •  ESC back  •  M playlist"
+                        : "Turn to scroll  •  Press to select  •  Long press back  •  Triple press playlist"
                     font.pixelSize: 11
                     color: colorMuted
                     Layout.alignment: Qt.AlignHCenter

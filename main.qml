@@ -43,6 +43,9 @@ ApplicationWindow {
                 } else if (event.key === Qt.Key_Escape || event.key === Qt.Key_Backspace) {
                     hardwareBridge.simulate_long_press()
                     event.accepted = true
+                } else if (event.key === Qt.Key_M && !(event.modifiers & Qt.ControlModifier)) {
+                    hardwareBridge.simulate_triple_press()
+                    event.accepted = true
                 }
             }
         }
@@ -247,8 +250,8 @@ ApplicationWindow {
 
                 Text {
                     text: hardwareBridge && hardwareBridge.is_mock()
-                        ? "MOCK MODE: ▲▼ scroll  •  SPACE select  •  ESC back"
-                        : "Turn to scroll  •  Press to select  •  Long press to back"
+                        ? "MOCK MODE: ▲▼ scroll  •  SPACE select  •  ESC back  •  M playlist"
+                        : "Turn to scroll  •  Press to select  •  Long press back  •  Triple press playlist"
                     font.pixelSize: 11
                     color: (hardwareBridge && hardwareBridge.is_mock()) ? "#E67E22" : colorMuted
                     Layout.alignment: Qt.AlignHCenter
