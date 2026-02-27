@@ -53,7 +53,7 @@ def main():
 def _run_test():
     """Live test: read IR events and show scancode -> action mapping."""
     try:
-        from IRReceiver import _try_evdev, _SCANCODE_MAP, IR_DIGIT, IR_SELECT, IR_BACK, IR_UP, IR_DOWN
+        from IRReceiver import _try_evdev, _load_scancode_map, IR_DIGIT, IR_SELECT, IR_BACK, IR_UP, IR_DOWN
         import evdev
     except Exception as e:
         print(f"Error: {e}")
@@ -65,7 +65,8 @@ def _run_test():
         return 1
 
     print(f"Testing {dev.path} - {dev.name}")
-    print("Press remote buttons (Ctrl+C to exit)...\n")
+    print("Press remote buttons (Ctrl+C to exit)")
+    print("To customize: copy ir_scancodes.example.json to ir_scancodes.json and edit.\n")
 
     action_names = {IR_DIGIT: "digit", IR_SELECT: "SELECT", IR_BACK: "BACK", IR_UP: "UP", IR_DOWN: "DOWN"}
 
@@ -79,7 +80,7 @@ def _run_test():
                     pass
             elif event.type == evdev.ecodes.EV_MSC and event.code == evdev.ecodes.MSC_SCAN:
                 scancode = event.value
-                mapped = _SCANCODE_MAP.get(scancode)
+                mapped = _load_scancode_map().get(scancode)
                 if mapped:
                     action, payload = mapped
                     name = action_names.get(action, action)

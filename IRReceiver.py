@@ -2,11 +2,17 @@
 BJJ Gym Timer - IR Receiver (KY-022)
 Reads from evdev (gpio-ir overlay) or lircd socket.
 Pin: GPIO 4 (physical 7) - Data; VCC→3.3V (pin 17); GND→pin 9
+
+Custom mapping: create ir_scancodes.json next to main.py, e.g.:
+  {"0x44": 3, "0x40": 4, "0x43": 5, "0x58": "up", "0x59": "down", "0x1C": "select"}
+  Numbers 0-9, or "select", "back", "up", "down"
 """
 
+import json
 import platform
 import threading
 import time
+from pathlib import Path
 
 # Key actions we emit
 IR_DIGIT = "digit"      # payload: 0-9
@@ -79,19 +85,61 @@ _EVDEV_MAP = {
 }
 
 # NEC scancode -> (action, payload) - for remotes that only emit EV_MSC (no keymap loaded)
-# Layout from your remote (0x44,0x40,0x43,0x07,0x15,0x09 = numbers); common 44-key style
+# Multiple common remote layouts; run ir_debug.py --test to see your remote's scancodes
 _SCANCODE_MAP = {
+    # Numbers - Layout A (44-key: 0x45=0..0x16=9)
     0x45: (IR_DIGIT, 0), 0x46: (IR_DIGIT, 1), 0x47: (IR_DIGIT, 2),
     0x44: (IR_DIGIT, 3), 0x40: (IR_DIGIT, 4), 0x43: (IR_DIGIT, 5),
     0x07: (IR_DIGIT, 6), 0x15: (IR_DIGIT, 7), 0x09: (IR_DIGIT, 8),
     0x16: (IR_DIGIT, 9),
-    # OK / Select (often 0x1C or similar on these remotes)
-    0x1C: (IR_SELECT, None), 0x0D: (IR_SELECT, None),
+    # Numbers - Layout B (standard NEC)
+    0x0C: (IR_DIGIT, 1), 0x18: (IR_DIGIT, 2), 0x5E: (IR_DIGIT, 3),
+    0x08: (IR_DIGIT, 4), 0x1C: (IR_DIGIT, 5), 0x5A: (IR_DIGIT, 6),
+    0x42: (IR_DIGIT, 7), 0x52: (IR_DIGIT, 8), 0x4A: (IR_DIGIT, 9),
+    # OK / Select (0x1C/0x15 can be Enter on some remotes - add after digits so SELECT wins)
+    0x0D: (IR_SELECT, None),
     # Back / Exit
-    0x0B: (IR_BACK, None), 0x0E: (IR_BACK, None),
-    # Up / Down
+    0x0B: (IR_BACK, None), 0x0E: (IR_BACK, None), 0x0F: (IR_BACK, None),
+    # Up/Down/Left/Right - use codes that don't conflict with numbers
+    0x58: (IR_UP, None), 0x59: (IR_DOWN, None),
     0x5B: (IR_UP, None), 0x5C: (IR_DOWN, None),
+    0x5D: (IR_UP, None), 0x60: (IR_DOWN, None),
+    # Some 44-key remotes use these for nav (add SELECT/back variants)
+    0x1C: (IR_SELECT, None), 0x15: (IR_SELECT, None),
 }
+
+
+def _load_scancode_map():
+    """Load default map, then overlay custom ir_scancodes.json if present."""
+    result = dict(_SCANCODE_MAP)
+    for base in [Path(__file__).parent, Path.cwd()]:
+        cfg = base / "ir_scancodes.json"
+        if cfg.exists():
+            try:
+                with open(cfg, "r") as f:
+                    custom = json.load(f)
+                for k, v in custom.items():
+                    if k.startswith("0x"):
+                        sc = int(k, 16)
+                    else:
+                        sc = int(k)
+                    if isinstance(v, int) and 0 <= v <= 9:
+                        result[sc] = (IR_DIGIT, v)
+                    elif isinstance(v, str):
+                        v = v.lower()
+                        if v == "select":
+                            result[sc] = (IR_SELECT, None)
+                        elif v == "back":
+                            result[sc] = (IR_BACK, None)
+                        elif v in ("up", "right"):
+                            result[sc] = (IR_UP, None)
+                        elif v in ("down", "left"):
+                            result[sc] = (IR_DOWN, None)
+            except Exception:
+                pass
+            break
+    return result
+
 
 # Maps lirc key names (from lircd) to our actions
 _LIRC_MAP = {
@@ -185,7 +233,7 @@ class IRReceiver:
                 elif event.type == evdev.ecodes.EV_MSC and event.code == evdev.ecodes.MSC_SCAN:
                     # No keymap loaded - kernel only sends scancodes; map them ourselves
                     scancode = event.value
-                    mapped = _SCANCODE_MAP.get(scancode)
+                    mapped = _load_scancode_map().get(scancode)
                     if mapped:
                         action, payload = mapped
                         self._emit(action, payload)

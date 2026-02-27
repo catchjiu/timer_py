@@ -77,7 +77,7 @@ sudo usermod -aG gpio $USER
    - **Back / Exit / Esc**: Go back, reset
    - **Up / Down / Left / Right**: Scroll (same as rotary)
 
-   If your remote uses different codes, use **lirc** instead: install `lirc`, run `irrecord` to capture your remote, and configure lircd. The app will use the lircd socket if evdev doesn't find an IR device.
+   If numbers or up/down don't work, run `python3 ir_debug.py --test` and press each button to see scancodes. Copy `ir_scancodes.example.json` to `ir_scancodes.json` and map your remote's scancodes (e.g. `"0x58": "up"`, `"0x44": 3`).
 
 ## Installation
 
