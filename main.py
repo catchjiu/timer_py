@@ -76,7 +76,7 @@ class HardwareBridge(QObject):
 
             gpiozero.pins.lgpio.LGPIOFactory.__init__ = _patched_lgpio_init
 
-            from gpiozero import RotaryEncoder, Button, TonalBuzzer
+            from gpiozero import RotaryEncoder, Button
 
             a_pin, b_pin = (PIN_DT, PIN_CLK) if SWAP_ENCODER_PINS else (PIN_CLK, PIN_DT)
             self._encoder = RotaryEncoder(a=a_pin, b=b_pin, wrap=True, max_steps=100)
@@ -87,7 +87,17 @@ class HardwareBridge(QObject):
             self._button.when_pressed = self._on_button_pressed
             self._button.when_released = self._on_button_released
 
-            self._buzzer = TonalBuzzer(PIN_BUZZER)
+            # Use lgpio directly for buzzer (TonalBuzzer.stop() unreliable on Pi 5)
+            for chip in [0, 4]:
+                try:
+                    self._lgpio_handle = lgpio.gpiochip_open(chip)
+                    lgpio.gpio_claim_output(self._lgpio_handle, PIN_BUZZER, 0)
+                    break
+                except Exception:
+                    self._lgpio_handle = None
+            else:
+                self._lgpio_handle = None
+            self._buzzer = None  # Not using TonalBuzzer
 
             self._sw_press_time = None
             self._long_press_fired = False
@@ -146,15 +156,15 @@ class HardwareBridge(QObject):
         self._sw_press_time = None
 
     def play_tone(self, frequency_hz: int, duration_ms: int):
-        """Play a tone via PWM. Must be called from main thread."""
-        if self._buzzer is not None:
-            if self._buzzer_stop_timer is not None:
-                self._buzzer_stop_timer.stop()
-                self._buzzer_stop_timer = None
-            self._stop_buzzer()  # Stop any current tone before starting new one
+        """Play a tone via lgpio PWM. Must be called from main thread."""
+        if self._buzzer_stop_timer is not None:
+            self._buzzer_stop_timer.stop()
+            self._buzzer_stop_timer = None
+        self._stop_buzzer()
+        if hasattr(self, "_lgpio_handle") and self._lgpio_handle is not None:
             try:
-                from gpiozero.tones import Tone
-                self._buzzer.play(Tone(frequency_hz))
+                import lgpio
+                lgpio.tx_pwm(self._lgpio_handle, PIN_BUZZER, frequency_hz, 50)  # 50% duty
                 self._buzzer_stop_timer = QTimer(self)
                 self._buzzer_stop_timer.setSingleShot(True)
                 self._buzzer_stop_timer.timeout.connect(self._stop_buzzer)
@@ -166,9 +176,10 @@ class HardwareBridge(QObject):
     @Slot()
     def _stop_buzzer(self):
         self._buzzer_stop_timer = None
-        if self._buzzer is not None:
+        if hasattr(self, "_lgpio_handle") and self._lgpio_handle is not None:
             try:
-                self._buzzer.stop()
+                import lgpio
+                lgpio.tx_pwm(self._lgpio_handle, PIN_BUZZER, 0, 0)  # Stop PWM
             except Exception:
                 pass
 
@@ -201,6 +212,13 @@ class HardwareBridge(QObject):
             self._buzzer_stop_timer.stop()
             self._buzzer_stop_timer = None
         self._stop_buzzer()
+        if hasattr(self, "_lgpio_handle") and self._lgpio_handle is not None:
+            try:
+                import lgpio
+                lgpio.gpiochip_close(self._lgpio_handle)
+            except Exception:
+                pass
+            self._lgpio_handle = None
         for dev in (self._encoder, self._button, self._buzzer):
             if dev is not None:
                 try:
