@@ -35,48 +35,6 @@ sudo usermod -aG gpio $USER
 3. If you see nothing when turning, try swapping CLK and DT wires, or set `SWAP_ENCODER_PINS = True` in `main.py`.
 4. Verify wiring: CLK→physical 11 (BCM 17), DT→physical 12 (BCM 18), SW→physical 13 (BCM 27), VCC→pin 1 (3.3V), GND→pin 6.
 
-### IR Receiver (KY-022) Setup
-
-1. **Hardware**: Data→physical 7 (GPIO 4), VCC→physical 17 (3.3V), GND→physical 9.
-
-2. **Enable gpio-ir overlay** – edit `/boot/firmware/config.txt` (or `/boot/config.txt` on older Pi OS):
-   ```
-   dtoverlay=gpio-ir,gpio_pin=4
-   ```
-   Reboot.
-
-3. **Install evdev** (for Python):
-   ```bash
-   sudo apt install python3-evdev
-   ```
-
-4. **Enable IR protocol decoding** (required for key events):
-   ```bash
-   sudo apt install ir-keytable
-   sudo ir-keytable -p all
-   ```
-   This enables protocol decoding. Without it, the kernel receives IR but won't emit key events.
-
-5. **Permissions** – ensure your user can read input devices:
-   ```bash
-   sudo usermod -aG input $USER
-   ```
-   Log out and back in (or reboot).
-
-6. **Debug** – if the remote doesn't work, run:
-   ```bash
-   python3 ir_debug.py
-   ```
-   Then test with `sudo ir-keytable -v -t -p all` and press remote buttons. You should see scancodes or key names.
-
-**IR key mapping**: The app maps common remote keys:
-   - **0–9**: Enter times (e.g. `5` `0` `0` = 5:00) or rounds
-   - **OK / Enter**: Select, confirm, start
-   - **Back / Exit / Esc**: Go back, reset
-   - **Up / Down / Left / Right**: Scroll (same as rotary)
-
-   If numbers or up/down don't work, run `python3 ir_debug.py --test` and press each button to see scancodes. Copy `ir_scancodes.example.json` to `ir_scancodes.json` and map your remote's scancodes (e.g. `"0x58": "up"`, `"0x44": 3`).
-
 ## Installation
 
 ```bash
@@ -95,6 +53,11 @@ pip install -r requirements.txt
 python main.py
 ```
 
+**Alternative UI** (green accent, header layout):
+```bash
+python main.py --alt
+```
+
 **Mock Mode**: When not running on Linux or when GPIO is unavailable, the app runs in mock mode. Use keyboard shortcuts:
 
 - **↑ / ↓** or **+ / -**: Simulate rotary encoder (scroll / adjust time)
@@ -105,8 +68,9 @@ python main.py
 ```
 timer-py/
 ├── main.py        # Hardware init, gpiozero bridge, QML engine
+├── main.qml       # Default UI (gold accent, footer bar)
+├── main_alt.qml   # Alternative UI (green accent, header layout)
 ├── TimerLogic.py  # BJJ state machine (modes, phases, timer logic)
-├── main.qml       # Luxury UI layout, progress arc, transitions
 ├── requirements.txt
 └── README.md
 ```

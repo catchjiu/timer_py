@@ -208,6 +208,30 @@ class TimerLogic(QObject):
 
     phaseLabel = Property(str, _get_phase_label, notify=stateChanged)
 
+    # --- Q_PROPERTY: nextPhaseLabel, nextPhaseSec (for "Next: Rest (60s)" UI) ---
+    def _get_next_phase_label(self):
+        if self._state == TimerState.WORK:
+            if self._mode == TimerMode.DRILLING:
+                return "Switch" if self._drill_half == 1 else "Round end"
+            return "Rest"
+        if self._state == TimerState.REST:
+            return "P2" if self._mode == TimerMode.DRILLING else "Work"
+        return ""
+
+    def _get_next_phase_sec(self):
+        if self._state == TimerState.WORK:
+            if self._mode == TimerMode.DRILLING and self._drill_half == 1:
+                return self._drill_rest_sec
+            if self._mode == TimerMode.SPARRING:
+                return self._spar_rest_sec
+            return 0
+        if self._state == TimerState.REST:
+            return self._drill_work_sec if self._mode == TimerMode.DRILLING else self._spar_work_sec
+        return 0
+
+    nextPhaseLabel = Property(str, _get_next_phase_label, notify=stateChanged)
+    nextPhaseSec = Property(int, _get_next_phase_sec, notify=stateChanged)
+
     # --- Rotary encoder delta (from hardware) ---
     def encoder_delta(self, delta: int):
         """Called when rotary encoder is turned. delta: +1 CW, -1 CCW."""

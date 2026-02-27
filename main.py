@@ -303,6 +303,7 @@ class SensorProvider(QObject):
     humidityChanged = Signal(float)
     weatherDescriptionChanged = Signal(str)
     timeStringChanged = Signal(str)
+    timeString12hChanged = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -310,6 +311,7 @@ class SensorProvider(QObject):
         self._humidity = 45.0
         self._weather_description = "—"
         self._time_string = "00:00"
+        self._time_string_12h = "12:00 AM"
         self._location = "Kaohsiung"
 
     def _fetch_weather(self) -> bool:
@@ -333,6 +335,14 @@ class SensorProvider(QObject):
         from datetime import datetime
         return datetime.now().strftime("%H:%M")
 
+    def get_time_string_12h(self) -> str:
+        from datetime import datetime
+        dt = datetime.now()
+        h, m = dt.hour, dt.minute
+        ampm = "AM" if h < 12 else "PM"
+        h12 = (h % 12) or 12
+        return f"{h12}:{m:02d} {ampm}"
+
     # Q_PROPERTY for QML binding
     def _get_temp(self): return self._temp
     temp = Property(float, _get_temp, notify=tempChanged)
@@ -346,6 +356,9 @@ class SensorProvider(QObject):
     def _get_time_string(self): return self._time_string
     timeString = Property(str, _get_time_string, notify=timeStringChanged)
 
+    def _get_time_string_12h(self): return self._time_string_12h
+    timeString12h = Property(str, _get_time_string_12h, notify=timeString12hChanged)
+
     def _get_location(self): return self._location
     location = Property(str, _get_location)
 
@@ -353,15 +366,19 @@ class SensorProvider(QObject):
         """Full refresh: fetch weather and update time."""
         self._fetch_weather()
         self._time_string = self.get_time_string()
+        self._time_string_12h = self.get_time_string_12h()
         self.tempChanged.emit(self._temp)
         self.humidityChanged.emit(self._humidity)
         self.weatherDescriptionChanged.emit(self._weather_description)
         self.timeStringChanged.emit(self._time_string)
+        self.timeString12hChanged.emit(self._time_string_12h)
 
     def _refresh_clock_only(self):
         """Update only the clock (no API call)."""
         self._time_string = self.get_time_string()
+        self._time_string_12h = self.get_time_string_12h()
         self.timeStringChanged.emit(self._time_string)
+        self.timeString12hChanged.emit(self._time_string_12h)
 
 
 def main():
@@ -399,7 +416,8 @@ def main():
     engine.rootContext().setContextProperty("hardwareBridge", hw_bridge)
     engine.rootContext().setContextProperty("sensorProvider", sensor_provider)
 
-    qml_file = Path(__file__).parent / "main.qml"
+    qml_name = "main_alt.qml" if "--alt" in sys.argv else "main.qml"
+    qml_file = Path(__file__).parent / qml_name
     engine.load(QUrl.fromLocalFile(str(qml_file)))
 
     if not engine.rootObjects():
