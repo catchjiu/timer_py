@@ -107,9 +107,11 @@ ApplicationWindow {
                 }
 
                 Text {
-                    text: "▲▼ scroll  •  SPACE select  •  ESC back"
+                    text: hardwareBridge.is_mock()
+                        ? "MOCK MODE: ▲▼ scroll  •  SPACE select  •  ESC back"
+                        : "Turn to scroll  •  Press to select  •  Long press to back"
                     font.pixelSize: 11
-                    color: colorMuted
+                    color: hardwareBridge.is_mock() ? "#E67E22" : colorMuted
                     Layout.alignment: Qt.AlignHCenter
                     Layout.topMargin: 12
                 }
@@ -279,6 +281,12 @@ ApplicationWindow {
                 font.pixelSize: 12
                 font.letterSpacing: 1
                 color: colorGold
+            }
+            Text {
+                text: hardwareBridge.is_mock() ? "MOCK" : "GPIO"
+                font.pixelSize: 10
+                color: hardwareBridge.is_mock() ? "#E67E22" : "#2ECC71"
+                Layout.leftMargin: 8
             }
         }
     }

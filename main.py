@@ -53,8 +53,25 @@ class HardwareBridge(QObject):
     def _init_gpiozero(self) -> bool:
         """Initialize gpiozero (Pi 5 compatible). Returns True if successful."""
         try:
+            # Pi 5 kernel 6.6.45+ fix: gpiochip changed from 4 to 0
+            import gpiozero.pins.lgpio
+            import lgpio
+
+            def _patched_lgpio_init(self, chip=None):
+                gpiozero.pins.lgpio.LGPIOFactory.__bases__[0].__init__(self)
+                for c in [0, 4]:  # Try 0 first (newer Pi 5), then 4
+                    try:
+                        self._handle = lgpio.gpiochip_open(c)
+                        self._chip = c
+                        self.pin_class = gpiozero.pins.lgpio.LGPIOPin
+                        return
+                    except Exception:
+                        continue
+                raise RuntimeError("Cannot open gpiochip 0 or 4 - check GPIO permissions (usermod -aG gpio $USER)")
+
+            gpiozero.pins.lgpio.LGPIOFactory.__init__ = _patched_lgpio_init
+
             from gpiozero import RotaryEncoder, Button, TonalBuzzer
-            from gpiozero.tones import Tone
 
             self._encoder = RotaryEncoder(clock=PIN_CLK, data=PIN_DT, wrap=True, max_steps=100)
             self._encoder.when_rotated_clockwise = lambda: self.encoderDelta.emit(1)
@@ -69,7 +86,9 @@ class HardwareBridge(QObject):
             self._sw_press_time = None
             self._long_press_fired = False
             return True
-        except Exception:
+        except Exception as e:
+            print(f"[BJJ Timer] GPIO init failed: {e}", file=sys.stderr)
+            print("[BJJ Timer] Running in MOCK mode - use keyboard: ↑↓ scroll, SPACE select, ESC back", file=sys.stderr)
             return False
 
     def _on_button_pressed(self):
@@ -125,6 +144,10 @@ class HardwareBridge(QObject):
     @Slot(result=bool)
     def is_mock(self) -> bool:
         return self._use_mock
+
+    @Slot(result=bool)
+    def is_hardware(self) -> bool:
+        return not self._use_mock
 
     def cleanup(self):
         """Release GPIO resources."""

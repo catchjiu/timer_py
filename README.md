@@ -18,6 +18,12 @@ A professional, high-end lifestyle BJJ (Brazilian Jiu-Jitsu) gym timer built wit
 
 Uses **gpiozero** (Pi 5 compatible via LGPIOFactory). No daemon required.
 
+**If rotary encoder doesn't work on Pi 5**, ensure your user has GPIO access:
+```bash
+sudo usermod -aG gpio $USER
+# Log out and back in, or reboot
+```
+
 ## Installation
 
 ```bash
