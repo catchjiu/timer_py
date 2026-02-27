@@ -129,14 +129,17 @@ class HardwareBridge(QObject):
             except Exception:
                 pass
 
+    @Slot(int)
     def simulate_encoder_delta(self, delta: int):
         """Simulate rotary turn (for mock/dev mode)."""
         self.encoderDelta.emit(delta)
 
+    @Slot()
     def simulate_short_press(self):
         """Simulate short press (for mock/dev mode)."""
         self.shortPress.emit()
 
+    @Slot()
     def simulate_long_press(self):
         """Simulate long press (for mock/dev mode)."""
         self.longPress.emit()
