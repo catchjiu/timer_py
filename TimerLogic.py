@@ -256,9 +256,9 @@ class TimerLogic(QObject):
             else:  # 2 mins or more: step by 30 sec
                 adj = 30 * delta
             if self._mode == TimerMode.CONFIG_DRILLING:
-                self._drill_work_sec = max(30, min(self._drill_work_sec + adj, 60 * 60))
+                self._drill_work_sec = max(10, min(self._drill_work_sec + adj, 60 * 60))
             else:
-                self._spar_work_sec = max(30, min(self._spar_work_sec + adj, 60 * 60))
+                self._spar_work_sec = max(10, min(self._spar_work_sec + adj, 60 * 60))
         elif self._config_step == 1:  # Rest time
             adj = 15 * delta
             if self._mode == TimerMode.CONFIG_DRILLING:
