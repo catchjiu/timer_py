@@ -357,9 +357,9 @@ class SensorProvider(QObject):
                 if t is not None or h is not None:
                     return True
                 continue
-            # Scrape HTML: "Temperature 27.5°C", "Humidity 50.8%" - tie humidity to % to avoid wrong match
+            # Scrape HTML: "Temperature 27.5°C", "Humidity 51.6%" - use [^0-9]* so we don't consume digits
             t_match = re.search(r'[Tt]emperature[^0-9]*(\d+\.?\d*)', raw)
-            h_match = re.search(r'[Hh]umidity[^%]*(\d+\.?\d*)\s*%', raw)
+            h_match = re.search(r'[Hh]umidity[^0-9]*(\d+\.?\d*)', raw)
             if t_match:
                 self._temp = float(t_match.group(1))
             if h_match:
