@@ -3,8 +3,8 @@ BJJ Gym Timer - Main Entry & Hardware Bridge
 Senior Embedded Software Architecture
 
 Hardware: gpiozero (Pi 5 compatible; uses LGPIOFactory)
-- Rotary Encoder: CLK(11), DT(12), SW(13)
-- Passive Buzzer: PWM on GPIO 16
+- Rotary Encoder: CLK→phys 11 (BCM 17), DT→phys 12 (BCM 18), SW→phys 13 (BCM 27)
+- Passive Buzzer: BCM 16 (physical 36)
 """
 
 import sys
@@ -21,10 +21,11 @@ from PySide6.QtGui import QGuiApplication
 from TimerLogic import TimerLogic
 
 # GPIO Pin Definitions (BCM numbering)
-PIN_CLK = 11
-PIN_DT = 12
-PIN_SW = 13
-PIN_BUZZER = 16  # PWM-capable pin
+# Physical pins 11, 12, 13 = BCM 17, 18, 27
+PIN_CLK = 17   # Physical pin 11
+PIN_DT = 18    # Physical pin 12
+PIN_SW = 27    # Physical pin 13
+PIN_BUZZER = 16  # Physical pin 36 (PWM)
 
 # Set True if rotary doesn't respond (swap CLK/DT)
 SWAP_ENCODER_PINS = False

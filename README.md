@@ -11,10 +11,10 @@ A professional, high-end lifestyle BJJ (Brazilian Jiu-Jitsu) gym timer built wit
 
 ## Hardware Configuration (Raspberry Pi)
 
-| Component      | GPIO Pins (BCM) | Notes                    |
-|----------------|-----------------|--------------------------|
-| Rotary Encoder | CLK(11), DT(12), SW(13) | VCC→3.3V, GND→GND |
-| Passive Buzzer | 16 (PWM)        | Pins 2, 14 also PWM-capable |
+| Component      | Physical Pins | BCM (GPIO) | Notes                    |
+|----------------|---------------|------------|--------------------------|
+| Rotary Encoder | CLK→11, DT→12, SW→13 | 17, 18, 27 | VCC→1 (3.3V), GND→6 |
+| Passive Buzzer | 36            | 16         | PWM-capable              |
 
 Uses **gpiozero** (Pi 5 compatible via LGPIOFactory). No daemon required.
 
@@ -33,7 +33,7 @@ sudo usermod -aG gpio $USER
 1. Run with debug to see if encoder events are received: `BJJ_DEBUG=1 python main.py`
 2. If you see "Encoder: +1" or "Encoder: -1" when turning, the wiring is fine—the issue is elsewhere.
 3. If you see nothing when turning, try swapping CLK and DT wires, or set `SWAP_ENCODER_PINS = True` in `main.py`.
-4. Verify wiring: CLK→GPIO11, DT→GPIO12, SW→GPIO13, VCC→3.3V, GND→GND.
+4. Verify wiring: CLK→physical 11 (BCM 17), DT→physical 12 (BCM 18), SW→physical 13 (BCM 27), VCC→pin 1 (3.3V), GND→pin 6.
 
 ## Installation
 
