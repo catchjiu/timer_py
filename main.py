@@ -326,7 +326,8 @@ class SensorProvider(QObject):
         url_base = ESP32_WEATHER_URL.rstrip("/") or "http://35.201.220.212:5000"
         if not url_base.startswith("http"):
             url_base = "http://" + url_base
-        for path in ["/", "/api", "/data", "/sensors"]:
+        # Try JSON endpoints first - ESP32 /data returns {"temp":X.X,"humidity":X.X}
+        for path in ["/data", "/api", "/api/reading", "/", "/sensors"]:
             url = url_base.rstrip("/") + path
             try:
                 req = Request(url, headers={"User-Agent": "BJJ-Timer/1.0"})
@@ -357,13 +358,20 @@ class SensorProvider(QObject):
                 if t is not None or h is not None:
                     return True
                 continue
-            # Scrape HTML: "Temperature 27.5°C", "Humidity 51.6%" - use [^0-9]* so we don't consume digits
+            # Scrape HTML - search only in text AFTER each label to avoid wrong numbers
             t_match = re.search(r'[Tt]emperature[^0-9]*(\d+\.?\d*)', raw)
-            h_match = re.search(r'[Hh]umidity[^0-9]*(\d+\.?\d*)', raw)
             if t_match:
                 self._temp = float(t_match.group(1))
-            if h_match:
-                self._humidity = float(h_match.group(1))
+            # Humidity: find "Humidity" then first number followed by % (avoids matching 81 before 52.6%)
+            h_match = None
+            h_idx = raw.lower().find('humidity')
+            if h_idx >= 0:
+                after_h = raw[h_idx + 8:]
+                h_match = re.search(r'(\d+\.?\d*)\s*%', after_h)
+                if h_match:
+                    val = float(h_match.group(1))
+                    if 0 <= val <= 100:  # sanity check
+                        self._humidity = val
             if t_match or h_match:
                 return True
         return False
