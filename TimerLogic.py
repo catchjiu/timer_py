@@ -79,6 +79,9 @@ class TimerLogic(QObject):
         # Config flow: 0=work, 1=rest/switch, 2=rounds, 3=ready
         self._config_step = 0
 
+        # IR digit buffer for time/round entry (e.g. "0500" = 5:00)
+        self._digit_buffer = ""
+
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
 
@@ -208,6 +211,83 @@ class TimerLogic(QObject):
 
     phaseLabel = Property(str, _get_phase_label, notify=stateChanged)
 
+    # --- IR remote handlers ---
+    def ir_digit(self, digit: int):
+        """Append digit to buffer for config entry. Apply on OK press."""
+        if self._mode not in (TimerMode.CONFIG_DRILLING, TimerMode.CONFIG_SPARRING):
+            return
+        if self._config_step == 0 or self._config_step == 1:  # Work or rest time
+            if len(self._digit_buffer) < 4:
+                self._digit_buffer += str(digit)
+                self._apply_digit_buffer()  # Live update as user types
+        else:  # Rounds
+            if len(self._digit_buffer) < 2:
+                self._digit_buffer += str(digit)
+                self._apply_digit_buffer()
+
+    def _apply_digit_buffer(self):
+        """Parse buffer and set current config value."""
+        if not self._digit_buffer:
+            return
+        if self._config_step == 0:  # Work time
+            sec = self._parse_mmss(self._digit_buffer)
+            if sec is not None:
+                sec = max(30, min(sec, 60 * 60))
+                if self._mode == TimerMode.CONFIG_DRILLING:
+                    self._drill_work_sec = sec
+                else:
+                    self._spar_work_sec = sec
+                self._emit_config_changed()
+        elif self._config_step == 1:  # Rest/switch time
+            sec = self._parse_mmss(self._digit_buffer)
+            if sec is not None:
+                sec = max(0, min(sec, 600))
+                if self._mode == TimerMode.CONFIG_DRILLING:
+                    self._drill_rest_sec = sec
+                else:
+                    self._spar_rest_sec = sec
+                self._emit_config_changed()
+        elif self._config_step == 2:  # Rounds
+            try:
+                r = int(self._digit_buffer)
+                r = max(1, min(r, 20))
+                if self._mode == TimerMode.CONFIG_DRILLING:
+                    self._drill_rounds = r
+                else:
+                    self._spar_rounds = r
+                self._emit_config_changed()
+            except ValueError:
+                pass
+
+    def _parse_mmss(self, s: str):
+        """Parse MMSS or M:SS to seconds. '0500'->300, '230'->150, '30'->30."""
+        if not s or not s.isdigit():
+            return None
+        n = int(s)
+        if len(s) <= 2:  # SS
+            return n
+        if len(s) == 3:   # M:SS e.g. 230 = 2:30
+            return (n // 100) * 60 + (n % 100)
+        # 4 digits: MMSS
+        return (n // 100) * 60 + (n % 100)
+
+    def _clear_digit_buffer(self):
+        self._digit_buffer = ""
+
+    def ir_select(self):
+        """IR OK/Enter - same as short press."""
+        self.short_press()
+
+    def ir_back(self):
+        """IR Back - same as long press."""
+        self._clear_digit_buffer()
+        self.long_press()
+
+    def ir_encoder_delta(self, delta: int):
+        """IR Up/Down - same as rotary encoder."""
+        self._clear_digit_buffer()
+        self.encoder_delta(delta)
+
     # --- Rotary encoder delta (from hardware) ---
     def encoder_delta(self, delta: int):
         """Called when rotary encoder is turned. delta: +1 CW, -1 CCW."""
@@ -247,6 +327,9 @@ class TimerLogic(QObject):
 
     # --- Short press: Start / Pause ---
     def short_press(self):
+        if self._mode in (TimerMode.CONFIG_DRILLING, TimerMode.CONFIG_SPARRING) and self._digit_buffer:
+            self._apply_digit_buffer()
+            self._clear_digit_buffer()
         if self._mode == TimerMode.MAIN_MENU:
             # Enter config for selected mode
             if self._menu_index == 0:

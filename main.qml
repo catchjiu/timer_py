@@ -34,11 +34,17 @@ ApplicationWindow {
                 } else if (event.key === Qt.Key_Down || event.key === Qt.Key_Minus) {
                     hardwareBridge.simulate_encoder_delta(-1)
                     event.accepted = true
-                } else if (event.key === Qt.Key_Space) {
+                } else if (event.key === Qt.Key_Space || event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                     hardwareBridge.simulate_short_press()
                     event.accepted = true
-                } else if (event.key === Qt.Key_Escape) {
+                } else if (event.key === Qt.Key_Escape || event.key === Qt.Key_Backspace) {
                     hardwareBridge.simulate_long_press()
+                    event.accepted = true
+                } else if (event.key >= Qt.Key_0 && event.key <= Qt.Key_9) {
+                    hardwareBridge.simulate_ir_digit(event.key - Qt.Key_0)
+                    event.accepted = true
+                } else if (event.key >= Qt.Key_Keypad0 && event.key <= Qt.Key_Keypad9) {
+                    hardwareBridge.simulate_ir_digit(event.key - Qt.Key_Keypad0)
                     event.accepted = true
                 }
             }

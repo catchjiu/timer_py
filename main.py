@@ -5,6 +5,7 @@ Senior Embedded Software Architecture
 Hardware: gpiozero (Pi 5 compatible; uses LGPIOFactory)
 - Rotary Encoder: CLK→phys 11 (BCM 17), DT→phys 12 (BCM 18), SW→phys 13 (BCM 27)
 - Passive Buzzer: BCM 23 (physical 16); 2=5V, 14=GND
+- IR Receiver (KY-022): Data→phys 7 (GPIO 4), VCC→phys 17 (3.3V), GND→phys 9
 """
 
 import sys
@@ -19,6 +20,7 @@ from PySide6.QtCore import QUrl, QObject, Signal, Slot, Property, QTimer, Qt, QM
 from PySide6.QtGui import QGuiApplication
 
 from TimerLogic import TimerLogic
+from IRReceiver import IRReceiver, IR_DIGIT, IR_SELECT, IR_BACK, IR_UP, IR_DOWN
 
 # GPIO Pin Definitions (BCM numbering)
 # Physical pins 11, 12, 13 = BCM 17, 18, 27
@@ -46,6 +48,12 @@ class HardwareBridge(QObject):
     shortPress = Signal()
     longPress = Signal()
 
+    # IR remote
+    irDigit = Signal(int)
+    irSelect = Signal()
+    irBack = Signal()
+    irEncoderDelta = Signal(int)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._encoder = None
@@ -53,7 +61,9 @@ class HardwareBridge(QObject):
         self._buzzer = None
         self._long_press_timer = None
         self._buzzer_stop_timer = None
+        self._ir_receiver = None
         self._use_mock = platform.system() != "Linux" or not self._init_gpiozero()
+        self._init_ir()
 
     def _init_gpiozero(self) -> bool:
         """Initialize gpiozero (Pi 5 compatible). Returns True if successful."""
@@ -107,6 +117,45 @@ class HardwareBridge(QObject):
             print(f"[BJJ Timer] GPIO init failed: {e}", file=sys.stderr)
             print("[BJJ Timer] Running in MOCK mode - use keyboard: ↑↓ scroll, SPACE select, ESC back", file=sys.stderr)
             return False
+
+    def _init_ir(self):
+        """Initialize IR receiver (evdev or lircd). Emits to main thread via QMetaObject."""
+        if platform.system() != "Linux":
+            return
+        def _on_ir(action, payload):
+            if action == IR_DIGIT:
+                QMetaObject.invokeMethod(self, "_emit_ir_digit", Qt.ConnectionType.QueuedConnection,
+                                          QMetaObject.Q_ARG(int, payload))
+            elif action == IR_SELECT:
+                QMetaObject.invokeMethod(self, "_emit_ir_select", Qt.ConnectionType.QueuedConnection)
+            elif action == IR_BACK:
+                QMetaObject.invokeMethod(self, "_emit_ir_back", Qt.ConnectionType.QueuedConnection)
+            elif action == IR_UP:
+                QMetaObject.invokeMethod(self, "_emit_ir_encoder", Qt.ConnectionType.QueuedConnection,
+                                          QMetaObject.Q_ARG(int, 1))
+            elif action == IR_DOWN:
+                QMetaObject.invokeMethod(self, "_emit_ir_encoder", Qt.ConnectionType.QueuedConnection,
+                                          QMetaObject.Q_ARG(int, -1))
+        self._ir_receiver = IRReceiver(_on_ir)
+        if self._ir_receiver.start():
+            if os.environ.get("BJJ_DEBUG"):
+                print(f"[BJJ Timer] IR receiver started ({self._ir_receiver._source})", file=sys.stderr)
+
+    @Slot(int)
+    def _emit_ir_digit(self, digit: int):
+        self.irDigit.emit(digit)
+
+    @Slot()
+    def _emit_ir_select(self):
+        self.irSelect.emit()
+
+    @Slot()
+    def _emit_ir_back(self):
+        self.irBack.emit()
+
+    @Slot(int)
+    def _emit_ir_encoder(self, delta: int):
+        self.irEncoderDelta.emit(delta)
 
     def _on_encoder(self, delta: int):
         """Encoder callback - runs in gpiozero thread, emit to main thread."""
@@ -239,6 +288,21 @@ class HardwareBridge(QObject):
         """Simulate long press (for mock/dev mode)."""
         self.longPress.emit()
 
+    @Slot(int)
+    def simulate_ir_digit(self, digit: int):
+        """Simulate IR digit (for mock/dev mode)."""
+        self.irDigit.emit(digit)
+
+    @Slot()
+    def simulate_ir_select(self):
+        """Simulate IR OK (for mock/dev mode)."""
+        self.irSelect.emit()
+
+    @Slot()
+    def simulate_ir_back(self):
+        """Simulate IR back (for mock/dev mode)."""
+        self.irBack.emit()
+
     @Slot(result=bool)
     def is_mock(self) -> bool:
         return self._use_mock
@@ -249,6 +313,9 @@ class HardwareBridge(QObject):
 
     def cleanup(self):
         """Release GPIO resources."""
+        if self._ir_receiver is not None:
+            self._ir_receiver.stop()
+            self._ir_receiver = None
         if self._buzzer_stop_timer is not None:
             self._buzzer_stop_timer.stop()
             self._buzzer_stop_timer = None
@@ -349,6 +416,12 @@ def main():
     hw_bridge.encoderDelta.connect(timer_logic.encoder_delta, Qt.ConnectionType.QueuedConnection)
     hw_bridge.shortPress.connect(timer_logic.short_press)
     hw_bridge.longPress.connect(timer_logic.long_press)
+
+    # IR remote
+    hw_bridge.irDigit.connect(timer_logic.ir_digit)
+    hw_bridge.irSelect.connect(timer_logic.ir_select)
+    hw_bridge.irBack.connect(timer_logic.ir_back)
+    hw_bridge.irEncoderDelta.connect(timer_logic.ir_encoder_delta, Qt.ConnectionType.QueuedConnection)
 
     # Buzzer: single buzz on round start, two longer buzzes on round end
     def on_round_started():

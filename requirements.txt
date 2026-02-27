@@ -7,3 +7,6 @@ PySide6>=6.5.0
 # Raspberry Pi GPIO (Pi 5 compatible)
 gpiozero>=2.0
 lgpio>=0.2.0; sys_platform == "linux"
+
+# IR receiver (KY-022) via evdev - Linux only
+evdev>=1.6.0; sys_platform == "linux"
