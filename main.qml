@@ -68,6 +68,11 @@ ApplicationWindow {
                 anchors.rightMargin: 16
                 spacing: 20
 
+                // Left: weather, temp, humidity
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 20
+
                 // Weather & location
                 ColumnLayout {
                     spacing: 0
@@ -136,11 +141,22 @@ ApplicationWindow {
                         color: colorWhite
                     }
                 }
+                }
 
-                Item { Layout.fillWidth: true }
+                // Center: academy name (aligned with drilling/sparring below)
+                Text {
+                    text: "CATCH JIU JITSU ACADEMY"
+                    font.family: fontFamily
+                    font.pixelSize: 16
+                    font.weight: Font.DemiBold
+                    color: colorGold
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignHCenter
+                }
 
-                // Clock (right side, where GPIO was)
+                // Right: clock
                 ColumnLayout {
+                    Layout.fillWidth: true
                     spacing: 0
                     Text {
                         text: "TIME"
@@ -171,15 +187,6 @@ ApplicationWindow {
                 anchors.centerIn: parent
                 visible: timerLogic.mode === "main_menu"
                 spacing: 20
-
-                Text {
-                    text: "Catch Jiu Jitsu Academy"
-                    font.family: fontFamily
-                    font.pixelSize: 22
-                    font.weight: Font.DemiBold
-                    color: colorGold
-                    Layout.alignment: Qt.AlignHCenter
-                }
 
                 Repeater {
                     model: ["DRILLING", "SPARRING"]
