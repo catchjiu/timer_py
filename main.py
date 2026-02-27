@@ -119,21 +119,20 @@ class HardwareBridge(QObject):
             return False
 
     def _init_ir(self):
-        """Initialize IR receiver (evdev or lircd). Emits to main thread via QTimer.singleShot."""
+        """Initialize IR receiver (evdev or lircd). Emit signals directly - Qt marshals to main thread."""
         if platform.system() != "Linux":
             return
         def _on_ir(action, payload):
-            # QTimer.singleShot(0, fn) posts to main thread - Q_ARG doesn't work reliably in PySide6
             if action == IR_DIGIT:
-                QTimer.singleShot(0, lambda p=payload: self._emit_ir_digit(p))
+                self.irDigit.emit(payload)
             elif action == IR_SELECT:
-                QTimer.singleShot(0, self._emit_ir_select)
+                self.irSelect.emit()
             elif action == IR_BACK:
-                QTimer.singleShot(0, self._emit_ir_back)
+                self.irBack.emit()
             elif action == IR_UP:
-                QTimer.singleShot(0, lambda: self._emit_ir_encoder(1))
+                self.irEncoderDelta.emit(1)
             elif action == IR_DOWN:
-                QTimer.singleShot(0, lambda: self._emit_ir_encoder(-1))
+                self.irEncoderDelta.emit(-1)
         self._ir_receiver = IRReceiver(_on_ir)
         if self._ir_receiver.start():
             if os.environ.get("BJJ_DEBUG"):
@@ -415,10 +414,10 @@ def main():
     hw_bridge.shortPress.connect(timer_logic.short_press)
     hw_bridge.longPress.connect(timer_logic.long_press)
 
-    # IR remote
-    hw_bridge.irDigit.connect(timer_logic.ir_digit)
-    hw_bridge.irSelect.connect(timer_logic.ir_select)
-    hw_bridge.irBack.connect(timer_logic.ir_back)
+    # IR remote (QueuedConnection - callback runs in IR thread)
+    hw_bridge.irDigit.connect(timer_logic.ir_digit, Qt.ConnectionType.QueuedConnection)
+    hw_bridge.irSelect.connect(timer_logic.ir_select, Qt.ConnectionType.QueuedConnection)
+    hw_bridge.irBack.connect(timer_logic.ir_back, Qt.ConnectionType.QueuedConnection)
     hw_bridge.irEncoderDelta.connect(timer_logic.ir_encoder_delta, Qt.ConnectionType.QueuedConnection)
 
     # Buzzer: single buzz on round start, two longer buzzes on round end
