@@ -15,7 +15,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtQml import QQmlApplicationEngine
-from PySide6.QtCore import QUrl, QObject, Signal, Slot, Property, QTimer, Qt
+from PySide6.QtCore import QUrl, QObject, Signal, Slot, Property, QTimer, Qt, QMetaObject
 from PySide6.QtGui import QGuiApplication
 
 from TimerLogic import TimerLogic
@@ -52,6 +52,7 @@ class HardwareBridge(QObject):
         self._button = None
         self._buzzer = None
         self._long_press_timer = None
+        self._buzzer_stop_timer = None
         self._use_mock = platform.system() != "Linux" or not self._init_gpiozero()
 
     def _init_gpiozero(self) -> bool:
@@ -90,6 +91,7 @@ class HardwareBridge(QObject):
 
             self._sw_press_time = None
             self._long_press_fired = False
+            self._long_press_timer = None
             return True
         except Exception as e:
             print(f"[BJJ Timer] GPIO init failed: {e}", file=sys.stderr)
@@ -103,8 +105,19 @@ class HardwareBridge(QObject):
         self.encoderDelta.emit(delta)
 
     def _on_button_pressed(self):
+        """Called from gpiozero thread - queue to main thread."""
+        QMetaObject.invokeMethod(
+            self, "_start_long_press_timer",
+            Qt.ConnectionType.QueuedConnection
+        )
+
+    @Slot()
+    def _start_long_press_timer(self):
+        """Runs on main thread - create QTimer here."""
         self._sw_press_time = time.monotonic()
         self._long_press_fired = False
+        if self._long_press_timer is not None:
+            self._long_press_timer.stop()
         self._long_press_timer = QTimer(self)
         self._long_press_timer.setSingleShot(True)
         self._long_press_timer.timeout.connect(self._on_long_press)
@@ -112,9 +125,19 @@ class HardwareBridge(QObject):
 
     def _on_long_press(self):
         self._long_press_fired = True
+        self._long_press_timer = None
         self.longPress.emit()
 
     def _on_button_released(self):
+        """Called from gpiozero thread - queue to main thread."""
+        QMetaObject.invokeMethod(
+            self, "_handle_button_released",
+            Qt.ConnectionType.QueuedConnection
+        )
+
+    @Slot()
+    def _handle_button_released(self):
+        """Runs on main thread."""
         if self._long_press_timer is not None:
             self._long_press_timer.stop()
             self._long_press_timer = None
@@ -123,17 +146,25 @@ class HardwareBridge(QObject):
         self._sw_press_time = None
 
     def play_tone(self, frequency_hz: int, duration_ms: int):
-        """Play a tone via PWM."""
+        """Play a tone via PWM. Must be called from main thread."""
         if self._buzzer is not None:
+            if self._buzzer_stop_timer is not None:
+                self._buzzer_stop_timer.stop()
+                self._buzzer_stop_timer = None
             try:
                 from gpiozero.tones import Tone
                 self._buzzer.play(Tone(frequency_hz))
-                QTimer.singleShot(duration_ms, self._stop_buzzer)
+                self._buzzer_stop_timer = QTimer(self)
+                self._buzzer_stop_timer.setSingleShot(True)
+                self._buzzer_stop_timer.timeout.connect(self._stop_buzzer)
+                self._buzzer_stop_timer.start(duration_ms)
             except Exception:
                 pass
         self.buzzerBeep.emit(frequency_hz, duration_ms)
 
+    @Slot()
     def _stop_buzzer(self):
+        self._buzzer_stop_timer = None
         if self._buzzer is not None:
             try:
                 self._buzzer.stop()
@@ -165,6 +196,9 @@ class HardwareBridge(QObject):
 
     def cleanup(self):
         """Release GPIO resources."""
+        if self._buzzer_stop_timer is not None:
+            self._buzzer_stop_timer.stop()
+            self._buzzer_stop_timer = None
         self._stop_buzzer()
         for dev in (self._encoder, self._button, self._buzzer):
             if dev is not None:
