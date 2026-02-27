@@ -27,7 +27,7 @@ ApplicationWindow {
         anchors.fill: parent
         focus: true
         Keys.onPressed: function(event) {
-            if (hardwareBridge.is_mock()) {
+            if (hardwareBridge && hardwareBridge.is_mock()) {
                 if (event.key === Qt.Key_Up || event.key === Qt.Key_Plus) {
                     hardwareBridge.simulate_encoder_delta(1)
                     event.accepted = true
@@ -89,14 +89,14 @@ ApplicationWindow {
                 ColumnLayout {
                     spacing: 0
                     Text {
-                        text: sensorProvider.weatherDescription
+                        text: sensorProvider ? sensorProvider.weatherDescription : ""
                         font.family: fontFamily
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
                         color: colorWhite
                     }
                     Text {
-                        text: sensorProvider.location
+                        text: sensorProvider ? sensorProvider.location : ""
                         font.pixelSize: 10
                         color: colorMuted
                     }
@@ -120,7 +120,7 @@ ApplicationWindow {
                         color: colorMuted
                     }
                     Text {
-                        text: sensorProvider.temp.toFixed(1) + " °C"
+                        text: sensorProvider ? sensorProvider.temp.toFixed(1) + " °C" : "--"
                         font.family: fontFamily
                         font.pixelSize: 15
                         font.weight: Font.DemiBold
@@ -146,7 +146,7 @@ ApplicationWindow {
                         color: colorMuted
                     }
                     Text {
-                        text: sensorProvider.humidity.toFixed(0) + " %"
+                        text: sensorProvider ? sensorProvider.humidity.toFixed(0) + " %" : "--"
                         font.family: fontFamily
                         font.pixelSize: 15
                         font.weight: Font.DemiBold
@@ -168,7 +168,7 @@ ApplicationWindow {
                         color: colorMuted
                     }
                     Text {
-                        text: sensorProvider.timeString
+                        text: sensorProvider ? sensorProvider.timeString : "--:--"
                         font.family: fontFamily
                         font.pixelSize: 20
                         font.weight: Font.Light
@@ -197,9 +197,9 @@ ApplicationWindow {
                         width: 280
                         height: 56
                         radius: 8
-                        color: index === timerLogic.menuIndex ? Qt.rgba(0.83, 0.69, 0.22, 0.25) : "transparent"
-                        border.width: index === timerLogic.menuIndex ? 2 : 1
-                        border.color: index === timerLogic.menuIndex ? colorGold : colorMuted
+                        color: (timerLogic && index === timerLogic.menuIndex) ? Qt.rgba(0.83, 0.69, 0.22, 0.25) : "transparent"
+                        border.width: (timerLogic && index === timerLogic.menuIndex) ? 2 : 1
+                        border.color: (timerLogic && index === timerLogic.menuIndex) ? colorGold : colorMuted
 
                         Behavior on color { ColorAnimation { duration: 200 } }
                         Behavior on border.color { ColorAnimation { duration: 200 } }
@@ -209,25 +209,25 @@ ApplicationWindow {
                             text: modelData
                             font.family: fontFamily
                             font.pixelSize: 20
-                            color: index === timerLogic.menuIndex ? colorGold : colorWhite
+                            color: (timerLogic && index === timerLogic.menuIndex) ? colorGold : colorWhite
                         }
 
                         MouseArea {
                             anchors.fill: parent
                             onClicked: {
-                                timerLogic.menuIndex = index
-                                hardwareBridge.simulate_short_press()
+                                if (timerLogic) timerLogic.menuIndex = index
+                                if (hardwareBridge) hardwareBridge.simulate_short_press()
                             }
                         }
                     }
                 }
 
                 Text {
-                    text: hardwareBridge.is_mock()
+                    text: hardwareBridge && hardwareBridge.is_mock()
                         ? "MOCK MODE: ▲▼ scroll  •  SPACE select  •  ESC back"
                         : "Turn to scroll  •  Press to select  •  Long press to back"
                     font.pixelSize: 11
-                    color: hardwareBridge.is_mock() ? "#E67E22" : colorMuted
+                    color: (hardwareBridge && hardwareBridge.is_mock()) ? "#E67E22" : colorMuted
                     Layout.alignment: Qt.AlignHCenter
                     Layout.topMargin: 12
                 }
@@ -237,11 +237,11 @@ ApplicationWindow {
             ColumnLayout {
                 id: configView
                 anchors.centerIn: parent
-                visible: timerLogic.mode === "config_drilling" || timerLogic.mode === "config_sparring"
+                visible: timerLogic && (timerLogic.mode === "config_drilling" || timerLogic.mode === "config_sparring")
                 spacing: 16
 
                 Text {
-                    text: timerLogic.mode === "config_drilling" ? "DRILLING SETUP" : "SPARRING SETUP"
+                    text: (timerLogic && timerLogic.mode === "config_drilling") ? "DRILLING SETUP" : "SPARRING SETUP"
                     font.family: fontFamily
                     font.pixelSize: 22
                     color: colorGold
@@ -251,11 +251,11 @@ ApplicationWindow {
                 RowLayout {
                     Layout.preferredWidth: 320
                     spacing: 12
-                    Text { text: "Work time:"; font.pixelSize: 16; color: timerLogic.configStep === 0 ? colorGold : colorMuted; Layout.preferredWidth: 140 }
+                    Text { text: "Work time:"; font.pixelSize: 16; color: (timerLogic && timerLogic.configStep === 0) ? colorGold : colorMuted; Layout.preferredWidth: 140 }
                     Text {
-                        text: Math.floor(timerLogic.configWorkSec / 60) + ":" + (timerLogic.configWorkSec % 60 < 10 ? "0" : "") + (timerLogic.configWorkSec % 60)
+                        text: timerLogic ? (Math.floor(timerLogic.configWorkSec / 60) + ":" + (timerLogic.configWorkSec % 60 < 10 ? "0" : "") + (timerLogic.configWorkSec % 60)) : "0:00"
                         font.pixelSize: 18
-                        font.weight: timerLogic.configStep === 0 ? Font.DemiBold : Font.Normal
+                        font.weight: (timerLogic && timerLogic.configStep === 0) ? Font.DemiBold : Font.Normal
                         color: colorWhite
                     }
                 }
@@ -263,26 +263,26 @@ ApplicationWindow {
                     Layout.preferredWidth: 320
                     spacing: 12
                     Text {
-                        text: (timerLogic.mode === "config_drilling" ? "Switch time:" : "Rest time:")
+                        text: (timerLogic && timerLogic.mode === "config_drilling") ? "Switch time:" : "Rest time:"
                         font.pixelSize: 16
-                        color: timerLogic.configStep === 1 ? colorGold : colorMuted
+                        color: (timerLogic && timerLogic.configStep === 1) ? colorGold : colorMuted
                         Layout.preferredWidth: 140
                     }
                     Text {
-                        text: Math.floor(timerLogic.configRestSwitchSec / 60) + ":" + (timerLogic.configRestSwitchSec % 60 < 10 ? "0" : "") + (timerLogic.configRestSwitchSec % 60)
+                        text: timerLogic ? (Math.floor(timerLogic.configRestSwitchSec / 60) + ":" + (timerLogic.configRestSwitchSec % 60 < 10 ? "0" : "") + (timerLogic.configRestSwitchSec % 60)) : "0:00"
                         font.pixelSize: 18
-                        font.weight: timerLogic.configStep === 1 ? Font.DemiBold : Font.Normal
+                        font.weight: (timerLogic && timerLogic.configStep === 1) ? Font.DemiBold : Font.Normal
                         color: colorWhite
                     }
                 }
                 RowLayout {
                     Layout.preferredWidth: 320
                     spacing: 12
-                    Text { text: "Rounds:"; font.pixelSize: 16; color: timerLogic.configStep === 2 ? colorGold : colorMuted; Layout.preferredWidth: 140 }
+                    Text { text: "Rounds:"; font.pixelSize: 16; color: (timerLogic && timerLogic.configStep === 2) ? colorGold : colorMuted; Layout.preferredWidth: 140 }
                     Text {
-                        text: timerLogic.configRounds
+                        text: timerLogic ? timerLogic.configRounds : 1
                         font.pixelSize: 18
-                        font.weight: timerLogic.configStep === 2 ? Font.DemiBold : Font.Normal
+                        font.weight: (timerLogic && timerLogic.configStep === 2) ? Font.DemiBold : Font.Normal
                         color: colorWhite
                     }
                 }
@@ -291,15 +291,15 @@ ApplicationWindow {
                     Layout.preferredWidth: 280
                     Layout.preferredHeight: 44
                     radius: 8
-                    color: timerLogic.configStep === 3 ? Qt.rgba(0.83, 0.69, 0.22, 0.3) : "transparent"
-                    border.width: timerLogic.configStep === 3 ? 2 : 1
-                    border.color: timerLogic.configStep === 3 ? colorGold : colorMuted
+                    color: (timerLogic && timerLogic.configStep === 3) ? Qt.rgba(0.83, 0.69, 0.22, 0.3) : "transparent"
+                    border.width: (timerLogic && timerLogic.configStep === 3) ? 2 : 1
+                    border.color: (timerLogic && timerLogic.configStep === 3) ? colorGold : colorMuted
 
                     Text {
                         anchors.centerIn: parent
-                        text: timerLogic.configStep === 3 ? "READY – Press to START" : "Press to confirm"
+                        text: (timerLogic && timerLogic.configStep === 3) ? "READY – Press to START" : "Press to confirm"
                         font.pixelSize: 14
-                        color: timerLogic.configStep === 3 ? colorGold : colorMuted
+                        color: (timerLogic && timerLogic.configStep === 3) ? colorGold : colorMuted
                     }
                 }
             }
@@ -308,7 +308,7 @@ ApplicationWindow {
             Item {
                 id: timerView
                 anchors.fill: parent
-                visible: timerLogic.mode === "drilling" || timerLogic.mode === "sparring"
+                visible: timerLogic && (timerLogic.mode === "drilling" || timerLogic.mode === "sparring")
 
                 // Circular progress arc (depletes clockwise from top)
                 Shape {
@@ -335,7 +335,7 @@ ApplicationWindow {
                             radiusX: arcRadius
                             radiusY: arcRadius
                             startAngle: -90
-                            sweepAngle: 360 * (1 - timerLogic.progress)
+                            sweepAngle: 360 * (1 - (timerLogic ? timerLogic.progress : 0))
                         }
                     }
                 }
@@ -373,11 +373,11 @@ ApplicationWindow {
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.bottom: clockDisplay.top
                     anchors.bottomMargin: 8
-                    text: timerLogic.phaseLabel
+                    text: timerLogic ? timerLogic.phaseLabel : ""
                     font.family: fontFamily
                     font.pixelSize: 14
-                    color: timerLogic.switchAlert ? colorGold : colorMuted
-                    opacity: timerLogic.phaseLabel ? 1 : 0
+                    color: (timerLogic && timerLogic.switchAlert) ? colorGold : colorMuted
+                    opacity: (timerLogic && timerLogic.phaseLabel) ? 1 : 0
 
                     Behavior on color { ColorAnimation { duration: 150 } }
                     Behavior on opacity { NumberAnimation { duration: 200 } }
@@ -387,7 +387,7 @@ ApplicationWindow {
                 Text {
                     id: clockDisplay
                     anchors.centerIn: parent
-                    text: timerLogic.displayTime
+                    text: timerLogic ? timerLogic.displayTime : "00:00"
                     font.family: fontFamily
                     font.pixelSize: 96
                     font.weight: Font.Light
@@ -401,7 +401,7 @@ ApplicationWindow {
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.top: clockDisplay.bottom
                     anchors.topMargin: 12
-                    text: "Round %1 / %2".arg(timerLogic.currentRound).arg(timerLogic.totalRounds)
+                    text: timerLogic ? ("Round %1 / %2".arg(timerLogic.currentRound).arg(timerLogic.totalRounds)) : "Round 0 / 0"
                     font.pixelSize: 14
                     color: colorMuted
                 }
@@ -410,7 +410,7 @@ ApplicationWindow {
                 Rectangle {
                     anchors.fill: parent
                     color: Qt.rgba(0, 0, 0, 0.6)
-                    visible: timerLogic.state === "paused"
+                    visible: timerLogic && timerLogic.state === "paused"
                     opacity: visible ? 1 : 0
 
                     Behavior on opacity { NumberAnimation { duration: 200 } }
@@ -427,7 +427,7 @@ ApplicationWindow {
                 Rectangle {
                     anchors.fill: parent
                     color: Qt.rgba(0.83, 0.69, 0.22, 0.15)
-                    visible: timerLogic.switchAlert
+                    visible: timerLogic && timerLogic.switchAlert
                     opacity: visible ? 1 : 0
 
                     Behavior on opacity { NumberAnimation { duration: 100 } }
@@ -448,21 +448,21 @@ ApplicationWindow {
     states: [
         State {
             name: "menu"
-            when: timerLogic.mode === "main_menu"
+            when: timerLogic && timerLogic.mode === "main_menu"
             PropertyChanges { target: menuView; opacity: 1 }
             PropertyChanges { target: configView; opacity: 0 }
             PropertyChanges { target: timerView; opacity: 0 }
         },
         State {
             name: "config"
-            when: timerLogic.mode === "config_drilling" || timerLogic.mode === "config_sparring"
+            when: timerLogic && (timerLogic.mode === "config_drilling" || timerLogic.mode === "config_sparring")
             PropertyChanges { target: menuView; opacity: 0 }
             PropertyChanges { target: configView; opacity: 1 }
             PropertyChanges { target: timerView; opacity: 0 }
         },
         State {
             name: "timer"
-            when: timerLogic.mode === "drilling" || timerLogic.mode === "sparring"
+            when: timerLogic && (timerLogic.mode === "drilling" || timerLogic.mode === "sparring")
             PropertyChanges { target: menuView; opacity: 0 }
             PropertyChanges { target: configView; opacity: 0 }
             PropertyChanges { target: timerView; opacity: 1 }

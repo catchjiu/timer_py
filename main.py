@@ -357,9 +357,9 @@ class SensorProvider(QObject):
                 if t is not None or h is not None:
                     return True
                 continue
-            # Scrape HTML: "Temperature" / "27.5°C", "Humidity" / "49.4%"
+            # Scrape HTML: "Temperature 27.5°C", "Humidity 50.8%" - tie humidity to % to avoid wrong match
             t_match = re.search(r'[Tt]emperature[^0-9]*(\d+\.?\d*)', raw)
-            h_match = re.search(r'[Hh]umidity[^0-9]*(\d+\.?\d*)', raw)
+            h_match = re.search(r'[Hh]umidity[^%]*(\d+\.?\d*)\s*%', raw)
             if t_match:
                 self._temp = float(t_match.group(1))
             if h_match:
@@ -462,11 +462,15 @@ def main():
     timer_logic.roundStarted.connect(on_round_started)
     timer_logic.roundEnded.connect(on_round_ended)
 
-    # QML engine
+    # QML engine - set context before load so bindings have access
     engine = QQmlApplicationEngine()
-    engine.rootContext().setContextProperty("timerLogic", timer_logic)
-    engine.rootContext().setContextProperty("hardwareBridge", hw_bridge)
-    engine.rootContext().setContextProperty("sensorProvider", sensor_provider)
+    root_ctx = engine.rootContext()
+    root_ctx.setContextProperty("timerLogic", timer_logic)
+    root_ctx.setContextProperty("hardwareBridge", hw_bridge)
+    root_ctx.setContextProperty("sensorProvider", sensor_provider)
+
+    # Initial sensor data before QML loads (avoids null during first bind)
+    sensor_provider.refresh()
 
     qml_name = "main_alt.qml" if "--alt" in sys.argv else "main.qml"
     qml_file = Path(__file__).parent / qml_name
@@ -477,7 +481,6 @@ def main():
 
     # Refresh sensors periodically: weather every 60s, clock every 10s
     from PySide6.QtCore import QTimer
-    sensor_provider.refresh()  # Initial load
     weather_timer = QTimer()
     weather_timer.timeout.connect(sensor_provider.refresh)
     weather_timer.start(60000)  # Weather: every 60 seconds
