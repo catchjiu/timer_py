@@ -5,15 +5,16 @@ Senior Embedded Software Architecture
 Hardware: gpiozero (Pi 5 compatible; uses LGPIOFactory)
 - Rotary Encoder: CLK→phys 11 (BCM 17), DT→phys 12 (BCM 18), SW→phys 13 (BCM 27)
 - Passive Buzzer: BCM 23 (physical 16); 2=5V, 14=GND
-- IR Receiver (KY-022): Data→phys 7 (GPIO 4), VCC→phys 17 (3.3V), GND→phys 9
 """
 
 import sys
 import os
 import platform
 import time
+import json
 from pathlib import Path
-from queue import Queue
+from urllib.request import urlopen, Request
+from urllib.error import URLError
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtQml import QQmlApplicationEngine
@@ -21,7 +22,6 @@ from PySide6.QtCore import QUrl, QObject, Signal, Slot, Property, QTimer, Qt, QM
 from PySide6.QtGui import QGuiApplication
 
 from TimerLogic import TimerLogic
-from IRReceiver import IRReceiver, IR_DIGIT, IR_SELECT, IR_BACK, IR_UP, IR_DOWN
 
 # GPIO Pin Definitions (BCM numbering)
 # Physical pins 11, 12, 13 = BCM 17, 18, 27
@@ -49,12 +49,6 @@ class HardwareBridge(QObject):
     shortPress = Signal()
     longPress = Signal()
 
-    # IR remote
-    irDigit = Signal(int)
-    irSelect = Signal()
-    irBack = Signal()
-    irEncoderDelta = Signal(int)
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self._encoder = None
@@ -62,9 +56,7 @@ class HardwareBridge(QObject):
         self._buzzer = None
         self._long_press_timer = None
         self._buzzer_stop_timer = None
-        self._ir_receiver = None
         self._use_mock = platform.system() != "Linux" or not self._init_gpiozero()
-        self._init_ir()
 
     def _init_gpiozero(self) -> bool:
         """Initialize gpiozero (Pi 5 compatible). Returns True if successful."""
@@ -118,56 +110,6 @@ class HardwareBridge(QObject):
             print(f"[BJJ Timer] GPIO init failed: {e}", file=sys.stderr)
             print("[BJJ Timer] Running in MOCK mode - use keyboard: ↑↓ scroll, SPACE select, ESC back", file=sys.stderr)
             return False
-
-    def _init_ir(self):
-        """Initialize IR receiver (evdev or lircd). Use invokeMethod for select/back; queue for digit/encoder."""
-        if platform.system() != "Linux":
-            return
-        self._ir_queue = Queue()
-        def _on_ir(action, payload):
-            if action == IR_SELECT:
-                QMetaObject.invokeMethod(self, "_emit_ir_select", Qt.ConnectionType.QueuedConnection)
-            elif action == IR_BACK:
-                QMetaObject.invokeMethod(self, "_emit_ir_back", Qt.ConnectionType.QueuedConnection)
-            else:
-                self._ir_queue.put((action, payload))
-                QMetaObject.invokeMethod(self, "_drain_one_ir", Qt.ConnectionType.QueuedConnection)
-        self._ir_receiver = IRReceiver(_on_ir)
-        if self._ir_receiver.start():
-            if os.environ.get("BJJ_DEBUG"):
-                print(f"[BJJ Timer] IR receiver started ({self._ir_receiver._source})", file=sys.stderr)
-
-    @Slot()
-    def _drain_one_ir(self):
-        """Process one IR event from queue (runs on main thread via invokeMethod)."""
-        try:
-            action, payload = self._ir_queue.get_nowait()
-        except Exception:
-            return
-        if os.environ.get("BJJ_DEBUG"):
-            print(f"[BJJ Timer] drain_ir {action} {payload}", file=sys.stderr)
-        if action == IR_DIGIT:
-            self.irDigit.emit(payload)
-        elif action == IR_UP:
-            self.irEncoderDelta.emit(1)
-        elif action == IR_DOWN:
-            self.irEncoderDelta.emit(-1)
-
-    @Slot(int)
-    def _emit_ir_digit(self, digit: int):
-        self.irDigit.emit(digit)
-
-    @Slot()
-    def _emit_ir_select(self):
-        self.irSelect.emit()
-
-    @Slot()
-    def _emit_ir_back(self):
-        self.irBack.emit()
-
-    @Slot(int)
-    def _emit_ir_encoder(self, delta: int):
-        self.irEncoderDelta.emit(delta)
 
     def _on_encoder(self, delta: int):
         """Encoder callback - runs in gpiozero thread, emit to main thread."""
@@ -300,21 +242,6 @@ class HardwareBridge(QObject):
         """Simulate long press (for mock/dev mode)."""
         self.longPress.emit()
 
-    @Slot(int)
-    def simulate_ir_digit(self, digit: int):
-        """Simulate IR digit (for mock/dev mode)."""
-        self.irDigit.emit(digit)
-
-    @Slot()
-    def simulate_ir_select(self):
-        """Simulate IR OK (for mock/dev mode)."""
-        self.irSelect.emit()
-
-    @Slot()
-    def simulate_ir_back(self):
-        """Simulate IR back (for mock/dev mode)."""
-        self.irBack.emit()
-
     @Slot(result=bool)
     def is_mock(self) -> bool:
         return self._use_mock
@@ -325,9 +252,6 @@ class HardwareBridge(QObject):
 
     def cleanup(self):
         """Release GPIO resources."""
-        if self._ir_receiver is not None:
-            self._ir_receiver.stop()
-            self._ir_receiver = None
         if self._buzzer_stop_timer is not None:
             self._buzzer_stop_timer.stop()
             self._buzzer_stop_timer = None
@@ -348,44 +272,62 @@ class HardwareBridge(QObject):
         self._encoder = self._button = self._buzzer = None
 
 
+# Kaohsiung, Taiwan: 3樓, No. 79號, Jhonghua 3rd Rd, Qianjin District
+KAOHSIUNG_LAT = 22.6273
+KAOHSIUNG_LON = 120.3014
+OPEN_METEO_URL = (
+    f"https://api.open-meteo.com/v1/forecast"
+    f"?latitude={KAOHSIUNG_LAT}&longitude={KAOHSIUNG_LON}"
+    "&current=temperature_2m,relative_humidity_2m,weather_code"
+)
+
+# WMO weather codes -> short description
+WEATHER_DESC = {
+    0: "Clear", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+    45: "Foggy", 48: "Foggy", 51: "Drizzle", 53: "Drizzle", 55: "Drizzle",
+    61: "Light rain", 63: "Rain", 65: "Heavy rain", 66: "Freezing rain",
+    67: "Freezing rain", 71: "Snow", 73: "Snow", 75: "Snow",
+    77: "Snow grains", 80: "Showers", 81: "Showers", 82: "Heavy showers",
+    85: "Snow showers", 86: "Snow showers", 95: "Thunderstorm",
+    96: "Thunderstorm", 99: "Thunderstorm",
+}
+
+
 class SensorProvider(QObject):
     """
-    Provides Temperature, Humidity, and System Time.
-    Uses system calls on Linux, dummy data otherwise.
+    Provides Temperature, Humidity, Weather, and System Time.
+    Uses Open-Meteo API for Kaohsiung, Taiwan (no API key).
     """
 
     tempChanged = Signal(float)
     humidityChanged = Signal(float)
+    weatherDescriptionChanged = Signal(str)
     timeStringChanged = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._temp = 22.0
         self._humidity = 45.0
+        self._weather_description = "—"
         self._time_string = "00:00"
-        self._use_dummy = True
-        self._init_sensors()
+        self._location = "Kaohsiung"
 
-    def _init_sensors(self):
-        """Try to initialize real sensors (e.g. DHT22 via sysfs or i2c)."""
-        # Placeholder: check for /sys/class/thermal or similar
-        if platform.system() == "Linux" and os.path.exists("/sys/class/thermal/thermal_zone0/temp"):
-            self._use_dummy = False
-
-    def get_temp(self) -> float:
-        if self._use_dummy:
-            return 22.5
+    def _fetch_weather(self) -> bool:
+        """Fetch weather from Open-Meteo. Returns True on success."""
         try:
-            with open("/sys/class/thermal/thermal_zone0/temp") as f:
-                return float(f.read().strip()) / 1000.0
-        except Exception:
-            return 22.0
-
-    def get_humidity(self) -> float:
-        if self._use_dummy:
-            return 48.0
-        # DHT22 would require a library; use dummy for now
-        return 48.0
+            req = Request(OPEN_METEO_URL, headers={"User-Agent": "BJJ-Timer/1.0"})
+            with urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read().decode())
+        except (URLError, json.JSONDecodeError, OSError) as e:
+            if os.environ.get("BJJ_DEBUG"):
+                print(f"[BJJ Timer] Weather fetch failed: {e}", file=sys.stderr)
+            return False
+        cur = data.get("current", {})
+        self._temp = cur.get("temperature_2m", self._temp)
+        self._humidity = cur.get("relative_humidity_2m", self._humidity)
+        code = cur.get("weather_code", 0)
+        self._weather_description = WEATHER_DESC.get(code, "—")
+        return True
 
     def get_time_string(self) -> str:
         from datetime import datetime
@@ -398,15 +340,27 @@ class SensorProvider(QObject):
     def _get_humidity(self): return self._humidity
     humidity = Property(float, _get_humidity, notify=humidityChanged)
 
+    def _get_weather_description(self): return self._weather_description
+    weatherDescription = Property(str, _get_weather_description, notify=weatherDescriptionChanged)
+
     def _get_time_string(self): return self._time_string
     timeString = Property(str, _get_time_string, notify=timeStringChanged)
 
+    def _get_location(self): return self._location
+    location = Property(str, _get_location)
+
     def refresh(self):
-        self._temp = self.get_temp()
-        self._humidity = self.get_humidity()
+        """Full refresh: fetch weather and update time."""
+        self._fetch_weather()
         self._time_string = self.get_time_string()
         self.tempChanged.emit(self._temp)
         self.humidityChanged.emit(self._humidity)
+        self.weatherDescriptionChanged.emit(self._weather_description)
+        self.timeStringChanged.emit(self._time_string)
+
+    def _refresh_clock_only(self):
+        """Update only the clock (no API call)."""
+        self._time_string = self.get_time_string()
         self.timeStringChanged.emit(self._time_string)
 
 
@@ -428,12 +382,6 @@ def main():
     hw_bridge.encoderDelta.connect(timer_logic.encoder_delta, Qt.ConnectionType.QueuedConnection)
     hw_bridge.shortPress.connect(timer_logic.short_press)
     hw_bridge.longPress.connect(timer_logic.long_press)
-
-    # IR remote (QueuedConnection - callback runs in IR thread)
-    hw_bridge.irDigit.connect(timer_logic.ir_digit, Qt.ConnectionType.QueuedConnection)
-    hw_bridge.irSelect.connect(timer_logic.ir_select, Qt.ConnectionType.QueuedConnection)
-    hw_bridge.irBack.connect(timer_logic.ir_back, Qt.ConnectionType.QueuedConnection)
-    hw_bridge.irEncoderDelta.connect(timer_logic.ir_encoder_delta, Qt.ConnectionType.QueuedConnection)
 
     # Buzzer: single buzz on round start, two longer buzzes on round end
     def on_round_started():
@@ -457,12 +405,15 @@ def main():
     if not engine.rootObjects():
         return -1
 
-    # Refresh sensors periodically
+    # Refresh sensors periodically: weather every 60s, clock every 10s
     from PySide6.QtCore import QTimer
-    sensor_timer = QTimer()
-    sensor_timer.timeout.connect(sensor_provider.refresh)
-    sensor_timer.start(10000)  # Every 10 seconds
-    sensor_provider.refresh()
+    sensor_provider.refresh()  # Initial load
+    weather_timer = QTimer()
+    weather_timer.timeout.connect(sensor_provider.refresh)
+    weather_timer.start(60000)  # Weather: every 60 seconds
+    clock_timer = QTimer()
+    clock_timer.timeout.connect(sensor_provider._refresh_clock_only)
+    clock_timer.start(10000)  # Clock: every 10 seconds
 
     ret = app.exec()
     hw_bridge.cleanup()

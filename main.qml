@@ -40,12 +40,6 @@ ApplicationWindow {
                 } else if (event.key === Qt.Key_Escape || event.key === Qt.Key_Backspace) {
                     hardwareBridge.simulate_long_press()
                     event.accepted = true
-                } else if (event.key >= Qt.Key_0 && event.key <= Qt.Key_9) {
-                    hardwareBridge.simulate_ir_digit(event.key - Qt.Key_0)
-                    event.accepted = true
-                } else if (event.key >= Qt.Key_Keypad0 && event.key <= Qt.Key_Keypad9) {
-                    hardwareBridge.simulate_ir_digit(event.key - Qt.Key_Keypad0)
-                    event.accepted = true
                 }
             }
         }
@@ -334,35 +328,126 @@ ApplicationWindow {
         }
 
         // --- INFO BAR (Footer) ---
-        RowLayout {
+        Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 24
-            spacing: 24
+            Layout.preferredHeight: 44
+            color: Qt.rgba(0, 0, 0, 0.35)
+            radius: 8
 
-            Text {
-                text: "TEMP  " + sensorProvider.temp.toFixed(1) + "°C"
-                font.pixelSize: 11
-                font.letterSpacing: 1
-                color: colorMuted
-            }
-            Text {
-                text: "HUM  " + sensorProvider.humidity.toFixed(0) + "%"
-                font.pixelSize: 11
-                font.letterSpacing: 1
-                color: colorMuted
-            }
-            Item { Layout.fillWidth: true }
-            Text {
-                text: sensorProvider.timeString
-                font.pixelSize: 12
-                font.letterSpacing: 1
-                color: colorGold
-            }
-            Text {
-                text: hardwareBridge.is_mock() ? "MOCK" : "GPIO"
-                font.pixelSize: 10
-                color: hardwareBridge.is_mock() ? "#E67E22" : "#2ECC71"
-                Layout.leftMargin: 8
+            RowLayout {
+                anchors.fill: parent
+                anchors.margins: 12
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                spacing: 20
+
+                // Weather & location
+                ColumnLayout {
+                    spacing: 0
+                    Text {
+                        text: sensorProvider.weatherDescription
+                        font.family: fontFamily
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                        color: colorWhite
+                    }
+                    Text {
+                        text: sensorProvider.location
+                        font.pixelSize: 10
+                        color: colorMuted
+                    }
+                }
+
+                Rectangle {
+                    width: 1
+                    height: 28
+                    color: Qt.rgba(0.83, 0.69, 0.22, 0.2)
+                    Layout.leftMargin: 4
+                    Layout.rightMargin: 4
+                }
+
+                // Temp
+                ColumnLayout {
+                    spacing: 0
+                    Text {
+                        text: "TEMP"
+                        font.pixelSize: 9
+                        font.letterSpacing: 1
+                        color: colorMuted
+                    }
+                    Text {
+                        text: sensorProvider.temp.toFixed(1) + " °C"
+                        font.family: fontFamily
+                        font.pixelSize: 15
+                        font.weight: Font.DemiBold
+                        color: colorWhite
+                    }
+                }
+
+                Rectangle {
+                    width: 1
+                    height: 28
+                    color: Qt.rgba(0.83, 0.69, 0.22, 0.2)
+                    Layout.leftMargin: 4
+                    Layout.rightMargin: 4
+                }
+
+                // Humidity
+                ColumnLayout {
+                    spacing: 0
+                    Text {
+                        text: "HUMIDITY"
+                        font.pixelSize: 9
+                        font.letterSpacing: 1
+                        color: colorMuted
+                    }
+                    Text {
+                        text: sensorProvider.humidity.toFixed(0) + " %"
+                        font.family: fontFamily
+                        font.pixelSize: 15
+                        font.weight: Font.DemiBold
+                        color: colorWhite
+                    }
+                }
+
+                Item { Layout.fillWidth: true }
+
+                // Clock
+                ColumnLayout {
+                    spacing: 0
+                    Text {
+                        text: "TIME"
+                        font.pixelSize: 9
+                        font.letterSpacing: 1
+                        color: colorMuted
+                    }
+                    Text {
+                        text: sensorProvider.timeString
+                        font.family: fontFamily
+                        font.pixelSize: 20
+                        font.weight: Font.Light
+                        font.letterSpacing: 2
+                        color: colorGold
+                    }
+                }
+
+                // Mode badge
+                Rectangle {
+                    Layout.leftMargin: 12
+                    Layout.preferredWidth: 52
+                    Layout.preferredHeight: 22
+                    radius: 4
+                    color: hardwareBridge.is_mock() ? Qt.rgba(0.9, 0.5, 0.14, 0.25) : Qt.rgba(0.18, 0.8, 0.44, 0.25)
+                    border.width: 1
+                    border.color: hardwareBridge.is_mock() ? "#E67E22" : "#2ECC71"
+                    Text {
+                        anchors.centerIn: parent
+                        text: hardwareBridge.is_mock() ? "MOCK" : "GPIO"
+                        font.pixelSize: 10
+                        font.weight: Font.DemiBold
+                        color: hardwareBridge.is_mock() ? "#E67E22" : "#2ECC71"
+                    }
+                }
             }
         }
     }

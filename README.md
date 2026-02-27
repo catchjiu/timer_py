@@ -7,7 +7,6 @@ A professional, high-end lifestyle BJJ (Brazilian Jiu-Jitsu) gym timer built wit
 - **DRILLING Mode**: Work period with "Switch!" alerts every 30 seconds (no full rest)
 - **SPARRING Mode**: Adjustable work + rest + rounds
 - **Rotary Encoder Navigation**: Scroll menu, add/subtract 30s when running
-- **IR Remote (KY-022)**: Numbers for time entry, OK=select, Back=back, Up/Down=scroll
 - **Chic UI**: Deep matte black (#121212), gold (#D4AF37), circular progress arc
 
 ## Hardware Configuration (Raspberry Pi)
@@ -16,7 +15,6 @@ A professional, high-end lifestyle BJJ (Brazilian Jiu-Jitsu) gym timer built wit
 |----------------|---------------|------------|--------------------------|
 | Rotary Encoder | CLK→11, DT→12, SW→13 | 17, 18, 27 | VCC→1 (3.3V), GND→6 |
 | Passive Buzzer | 16 (signal)   | 23         | 2=5V, 14=GND, 16=signal   |
-| IR Receiver (KY-022) | Data→7 | 4 | VCC→17 (3.3V), GND→9 |
 
 Uses **gpiozero** (Pi 5 compatible via LGPIOFactory). No daemon required.
 
@@ -102,15 +100,12 @@ python main.py
 - **↑ / ↓** or **+ / -**: Simulate rotary encoder (scroll / adjust time)
 - **Space** or **Enter**: Short press (Start/Pause/Select)
 - **Escape** or **Backspace**: Long press (Reset/Back to menu)
-- **0–9** (number keys): Enter times or rounds in config (e.g. `5` `0` `0` = 5:00)
-
 ## Project Structure
 
 ```
 timer-py/
-├── main.py        # Hardware init, gpiozero + IR bridge, QML engine
+├── main.py        # Hardware init, gpiozero bridge, QML engine
 ├── TimerLogic.py  # BJJ state machine (modes, phases, timer logic)
-├── IRReceiver.py  # IR receiver (evdev + lircd fallback)
 ├── main.qml       # Luxury UI layout, progress arc, transitions
 ├── requirements.txt
 └── README.md
